@@ -80,11 +80,14 @@ export default function Survey({ onComplete }) {
       <div className="survey-options">
         {question.options.map(opt => {
           const selected = isSelected(question.id, opt.id, question.type);
+          const isDisabled = !!opt.disabled;
           return (
             <button
               key={opt.id}
-              className={`option-btn ${selected ? 'selected' : ''}`}
-              onClick={() => toggleAnswer(question.id, opt.id, question.type)}
+              type="button"
+              className={`option-btn ${selected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+              onClick={() => !isDisabled && toggleAnswer(question.id, opt.id, question.type)}
+              disabled={isDisabled}
             >
               <div className="option-check">
                 {question.type === 'single' ? (

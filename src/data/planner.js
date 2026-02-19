@@ -16,7 +16,8 @@ import { TOOLS, QUESTIONS, scoreTool } from './tools.js';
 
 // 툴별 역할 정의
 const TOOL_ROLES = {
-  framer:    { role: '랜딩페이지 제작', icon: '🎨' },
+  'google-ai-studio': { role: '랜딩페이지 제작', icon: '🤖' },
+  framer:    { role: '웹사이트 제작', icon: '🎨' },
   webflow:   { role: '웹사이트 제작', icon: '🌊' },
   bubble:    { role: '앱 기능 구현', icon: '⚙️' },
   bolt:      { role: 'AI 풀스택 생성', icon: '⚡' },

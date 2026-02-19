@@ -170,6 +170,18 @@ body {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
+.option-btn.disabled {
+  opacity: 0.45;
+  border-color: var(--border);
+  background: var(--bg);
+  cursor: not-allowed;
+}
+.option-btn.disabled:hover {
+  border-color: var(--border);
+  background: var(--bg);
+}
+.option-btn.disabled .option-label,
+.option-btn.disabled .option-desc { color: var(--text3); }
 
 .option-check { flex-shrink: 0; padding-top: 2px; }
 .radio, .checkbox {

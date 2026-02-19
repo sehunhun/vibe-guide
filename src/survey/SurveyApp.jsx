@@ -107,11 +107,14 @@ export default function SurveyApp() {
         <div className="options-grid">
           {question.options.map(opt => {
             const sel = isSelected(question.id, opt.id, question.type);
+            const isDisabled = !!opt.disabled;
             return (
               <button
                 key={opt.id}
-                className={`option-card ${sel ? 'selected' : ''}`}
-                onClick={() => toggle(question.id, opt.id, question.type)}
+                type="button"
+                className={`option-card ${sel ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                onClick={() => !isDisabled && toggle(question.id, opt.id, question.type)}
+                disabled={isDisabled}
               >
                 <div className="option-marker">
                   {question.type === 'single' ? (

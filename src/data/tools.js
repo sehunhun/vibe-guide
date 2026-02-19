@@ -18,12 +18,12 @@ export const QUESTIONS = [
     emoji: '🌐',
     type: 'single',
     options: [
-      { id: 'landing', label: '랜딩페이지', desc: '제품/서비스 소개, 신청 받기' },
-      { id: 'community', label: '커뮤니티', desc: '회원들이 글 쓰고 소통하는 공간' },
-      { id: 'store', label: '온라인 쇼핑몰', desc: '상품 판매, 결제, 주문 관리' },
-      { id: 'portfolio', label: '포트폴리오 / 블로그', desc: '나를 소개하는 개인 사이트' },
-      { id: 'saas', label: 'SaaS / 웹 앱', desc: '로그인해서 사용하는 서비스' },
-      { id: 'content', label: '콘텐츠 판매', desc: '강의, 전자책, 템플릿 판매' },
+      { id: 'landing', label: '랜딩페이지 (데모)', desc: '제품/서비스 소개, 신청 받기' },
+      { id: 'community', label: '커뮤니티', desc: '회원들이 글 쓰고 소통하는 공간', disabled: true },
+      { id: 'store', label: '온라인 쇼핑몰', desc: '상품 판매, 결제, 주문 관리', disabled: true },
+      { id: 'portfolio', label: '포트폴리오 / 블로그', desc: '나를 소개하는 개인 사이트', disabled: true },
+      { id: 'saas', label: 'SaaS / 웹 앱', desc: '로그인해서 사용하는 서비스', disabled: true },
+      { id: 'content', label: '콘텐츠 판매', desc: '강의, 전자책, 템플릿 판매', disabled: true },
     ],
   },
   {
@@ -78,6 +78,20 @@ export const QUESTIONS = [
 
 // 툴 데이터
 export const TOOLS = [
+  {
+    id: 'google-ai-studio',
+    name: 'Google AI Studio',
+    category: 'vibe',
+    url: 'https://aistudio.google.com/',
+    logo: '🤖',
+    tagline: 'Google AI로 랜딩페이지 제작',
+    desc: 'Google AI Studio로 랜딩페이지를 만들 수 있는 툴',
+    strengths: ['landing', 'demo', 'personal', 'onetime'],
+    features: ['form', 'ops'],
+    skillMin: 'none',
+    budgetRange: ['free', 'usage', 'low'],
+    pricing: '무료 시작',
+  },
   {
     id: 'framer',
     name: 'Framer',
