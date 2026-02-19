@@ -1,0 +1,1 @@
+(()=>{function t(){chrome.runtime.sendMessage({type:"URL_CHANGED",url:location.href,hostname:location.hostname}).catch(function(){})}window.addEventListener("popstate",t);var e=history.pushState.bind(history),o=history.replaceState.bind(history);history.pushState=function(){e.apply(void 0,arguments),t()},history.replaceState=function(){o.apply(void 0,arguments),t()}})();
