@@ -58,6 +58,7 @@ export default function App() {
     await storage.clearAll();
     setPlan(null);
     setScreen('survey');
+    chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' });
   };
 
   const handlePlanUpdate = (updatedPlan) => {

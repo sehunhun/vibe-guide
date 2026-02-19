@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "바이브코딩/노코딩툴 개발 가이드 크롬 익스텐션",
   "scripts": {
-    "dev": "webpack --mode development --watch",
-    "build": "webpack --mode production"
+    "dev": "npx webpack --mode development --watch",
+    "build": "npx webpack --mode production"
   },
   "devDependencies": {
     "webpack": "^5.91.0",

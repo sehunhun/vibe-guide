@@ -9,14 +9,14 @@ export default function SurveyApp() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 이미 플랜이 있으면 guide.html로 바로 이동
+  // 이미 플랜이 있으면 '가이드 열기' 안내 화면 (사이드패널로 열림)
   useEffect(() => {
     storage.getPlan().then(saved => {
       if (saved) {
-        window.location.href = chrome.runtime.getURL('guide.html');
-      } else {
-        setLoading(false);
+        setPlan(saved);
+        setShowResult(true); // 플랜 결과 화면으로 (가이드 시작 버튼 → 사이드패널)
       }
+      setLoading(false);
     });
   }, []);
 
@@ -66,7 +66,7 @@ export default function SurveyApp() {
   }
 
   function handleStart() {
-    window.location.href = chrome.runtime.getURL('guide.html');
+    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
   }
 
   if (showResult && plan) {

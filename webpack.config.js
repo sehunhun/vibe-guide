@@ -6,6 +6,7 @@ module.exports = {
   entry: {
     survey: './src/survey/index.jsx',
     guide: './src/guide/index.jsx',
+    sidepanel: './src/sidepanel/index.jsx',
     background: './src/background/index.js',
     content: './src/content/index.js',
   },
@@ -38,6 +39,11 @@ module.exports = {
       template: './src/guide/index.html',
       filename: 'guide.html',
       chunks: ['guide'],
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/sidepanel/sidepanel.html',
+      filename: 'sidepanel.html',
+      chunks: ['sidepanel'],
     }),
     new CopyPlugin({
       patterns: [

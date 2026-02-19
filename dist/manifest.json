@@ -26,12 +26,9 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": [
-    "storage",
-    "tabs",
-    "activeTab"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ]
+  "permissions": ["storage", "tabs", "activeTab", "sidePanel"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "host_permissions": ["<all_urls>"]
 }
