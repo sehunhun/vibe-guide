@@ -1,6 +1,12 @@
 import { TOOLS, QUESTIONS, scoreTool } from './tools.js';
 
 /**
+ * demo: 랜딩페이지만, 진행 순서 고정 (Google AI Studio → GitHub → Vercel)
+ * production: 설문 기반 툴 추천 + 동적 스텝
+ */
+export const PLAN_MODE = 'demo'; // 'demo' | 'production'
+
+/**
  * 설문 응답을 받아 툴 플랜을 생성한다.
  * 반환값은 chrome.storage에 저장되며 Step2에서 사용된다.
  *
@@ -28,6 +34,7 @@ const TOOL_ROLES = {
   teachable: { role: '콘텐츠 판매', icon: '🎓' },
   notion:    { role: '노션 기반 사이트', icon: '📝' },
   replit:    { role: 'AI 코딩+배포', icon: '🔁' },
+  vercel:    { role: '배포 & 호스팅', icon: '▲' },
 };
 
 // 툴별 단계 생성 템플릿
@@ -91,8 +98,72 @@ function generateStepsForTool(tool, order, answers) {
   }));
 }
 
+/** 데모 모드: Google AI Studio → GitHub → Vercel 순서로 하드코딩된 플랜 */
+function buildDemoPlan(answers) {
+  const googleTool = TOOLS.find(t => t.id === 'google-ai-studio');
+  const vercelTool = TOOLS.find(t => t.id === 'vercel');
+  if (!googleTool || !vercelTool) throw new Error('Demo requires google-ai-studio and vercel in TOOLS');
+
+  const toolsWithOrder = [
+    { ...googleTool, ...TOOL_ROLES['google-ai-studio'], order: 1, score: 0 },
+    { ...vercelTool, ...TOOL_ROLES.vercel, order: 2, score: 0 },
+  ];
+
+  const steps = [
+    {
+      stepId: 'demo_google_landing',
+      toolId: 'google-ai-studio',
+      toolName: googleTool.name,
+      toolIcon: googleTool.logo,
+      order: 0,
+      status: 'pending',
+      title: 'Google AI Studio에서 랜딩페이지 제작',
+      desc: 'Google AI Studio로 랜딩페이지를 만드세요.',
+      url: googleTool.url,
+      type: 'start',
+    },
+    {
+      stepId: 'demo_github_connect',
+      toolId: 'github',
+      toolName: 'GitHub',
+      toolIcon: '🐙',
+      order: 1,
+      status: 'pending',
+      title: '깃허브 연동',
+      desc: '만든 프로젝트를 GitHub 저장소에 연결하세요.',
+      url: 'https://github.com',
+      type: 'feature',
+    },
+    {
+      stepId: 'demo_vercel_deploy',
+      toolId: 'vercel',
+      toolName: vercelTool.name,
+      toolIcon: vercelTool.logo,
+      order: 2,
+      status: 'pending',
+      title: 'Vercel로 배포',
+      desc: 'Vercel에서 GitHub 저장소를 연결해 사이트를 배포하세요.',
+      url: vercelTool.url,
+      type: 'deploy',
+    },
+  ];
+
+  return {
+    answers,
+    tools: toolsWithOrder,
+    steps,
+    currentStepId: steps[0].stepId,
+    createdAt: Date.now(),
+    visitedUrls: {},
+  };
+}
+
 export function buildPlan(answers) {
-  // 점수 계산 및 정렬
+  if (PLAN_MODE === 'demo') {
+    return buildDemoPlan(answers);
+  }
+
+  // production: 점수 계산 및 정렬
   const scored = TOOLS.map(tool => ({
     ...tool,
     score: scoreTool(tool, answers),
@@ -100,15 +171,16 @@ export function buildPlan(answers) {
   }))
     .filter(t => t.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 3); // 최대 3개 툴
+    .slice(0, 1); // 메인 툴 1개만
 
   // 메인 툴 (1순위)
-  const mainTool = scored[0];
-  // 보조 툴들
-  const subTools = scored.slice(1);
-
-  // 각 툴에 order 부여
-  const toolsWithOrder = scored.map((t, i) => ({ ...t, order: i + 1 }));
+  const mainTool = { ...scored[0], order: 1 };
+  // 보조 툴: Vercel 하나만
+  const vercelTool = TOOLS.find(t => t.id === 'vercel');
+  const subTools = vercelTool
+    ? [{ ...vercelTool, ...(TOOL_ROLES.vercel || { role: '배포 & 호스팅', icon: '▲' }), order: 2, score: 0 }]
+    : [];
+  const toolsWithOrder = [mainTool, ...subTools];
 
   // 전체 스텝 생성
   const steps = toolsWithOrder.flatMap(tool =>

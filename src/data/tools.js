@@ -246,6 +246,20 @@ export const TOOLS = [
     budgetRange: ['free', 'usage', 'low'],
     pricing: '무료 시작 / 유료 월 $20~',
   },
+  {
+    id: 'vercel',
+    name: 'Vercel',
+    category: 'vibe',
+    url: 'https://vercel.com',
+    logo: '▲',
+    tagline: '배포 & 호스팅',
+    desc: '만든 사이트를 배포하고 도메인을 연결하는 플랫폼',
+    strengths: ['landing', 'ops'],
+    features: ['ops'],
+    skillMin: 'none',
+    budgetRange: ['free', 'usage', 'low'],
+    pricing: '무료 시작',
+  },
 ];
 
 // 스킬 레벨 순서

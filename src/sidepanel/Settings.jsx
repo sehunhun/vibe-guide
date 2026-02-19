@@ -5,13 +5,14 @@ const AI_MODELS = [
   { id: 'gpt-4o-mini', label: 'GPT-4o mini', provider: 'openai', desc: '빠르고 저렴함' },
   { id: 'claude-3-5-haiku', label: 'Claude 3.5 Haiku', provider: 'anthropic', desc: '빠르고 저렴, 코딩 강점' },
   { id: 'claude-3-7-sonnet', label: 'Claude 3.7 Sonnet', provider: 'anthropic', desc: '균형잡힌 성능' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'google', desc: '빠르고 다재다능, Google AI' },
 ];
 
 export default function Settings({ onBack }) {
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
-  const [apiKeys, setApiKeys] = useState({ openai: '', anthropic: '' });
+  const [apiKeys, setApiKeys] = useState({ openai: '', anthropic: '', google: '' });
   const [saved, setSaved] = useState(false);
-  const [showKey, setShowKey] = useState({ openai: false, anthropic: false });
+  const [showKey, setShowKey] = useState({ openai: false, anthropic: false, google: false });
 
   useEffect(() => {
     chrome.storage.local.get(['aiModel', 'apiKeys'], (r) => {
@@ -48,7 +49,9 @@ export default function Settings({ onBack }) {
               onClick={() => setSelectedModel(model.id)}
             >
               <div className="model-left">
-                <span className="provider-badge">{model.provider === 'openai' ? '🟢' : '🟣'}</span>
+                <span className="provider-badge">
+                  {model.provider === 'openai' ? '🟢' : model.provider === 'google' ? '🔵' : '🟣'}
+                </span>
                 <div>
                   <span className="model-label">{model.label}</span>
                   <span className="model-desc">{model.desc}</span>
@@ -64,7 +67,9 @@ export default function Settings({ onBack }) {
         <h3>API 키</h3>
         <p className="settings-desc">
           선택한 모델({selectedModelInfo?.label})은{' '}
-          <strong>{requiredProvider === 'openai' ? 'OpenAI' : 'Anthropic'}</strong> API 키가 필요해요
+          <strong>
+          {requiredProvider === 'openai' ? 'OpenAI' : requiredProvider === 'google' ? 'Google AI' : 'Anthropic'}
+        </strong> API 키가 필요해요
         </p>
 
         {/* OpenAI */}
@@ -95,6 +100,39 @@ export default function Settings({ onBack }) {
                 onClick={() => setShowKey(prev => ({ ...prev, openai: !prev.openai }))}
               >
                 {showKey.openai ? '🙈' : '👁️'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Google */}
+        {requiredProvider === 'google' && (
+          <div className="api-key-field">
+            <label>
+              Google AI API Key
+              <a
+                href="#"
+                className="get-key-link"
+                onClick={(e) => {
+                  e.preventDefault();
+                  chrome.tabs.create({ url: 'https://aistudio.google.com/apikey' });
+                }}
+              >
+                키 발급받기 →
+              </a>
+            </label>
+            <div className="input-wrapper">
+              <input
+                type={showKey.google ? 'text' : 'password'}
+                placeholder="AIza..."
+                value={apiKeys.google}
+                onChange={e => setApiKeys(prev => ({ ...prev, google: e.target.value }))}
+              />
+              <button
+                className="btn-toggle-key"
+                onClick={() => setShowKey(prev => ({ ...prev, google: !prev.google }))}
+              >
+                {showKey.google ? '🙈' : '👁️'}
               </button>
             </div>
           </div>
