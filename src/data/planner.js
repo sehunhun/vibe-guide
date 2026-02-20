@@ -189,27 +189,53 @@ export function buildPlan(answers) {
   };
 }
 
-// 스토리지 헬퍼
+// 스토리지 헬퍼 (Chrome Extension 또는 웹 환경 모두 지원)
+const isChromeExtension = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+
 export const storage = {
   async getPlan() {
-    return new Promise(resolve => {
-      chrome.storage.local.get('plan', r => resolve(r.plan || null));
-    });
+    if (isChromeExtension) {
+      return new Promise(resolve => {
+        chrome.storage.local.get('plan', r => resolve(r.plan || null));
+      });
+    } else {
+      // 웹 환경: localStorage 사용
+      const stored = localStorage.getItem('plan');
+      return stored ? JSON.parse(stored) : null;
+    }
   },
   async savePlan(plan) {
-    return new Promise(resolve => {
-      chrome.storage.local.set({ plan }, resolve);
-    });
+    if (isChromeExtension) {
+      return new Promise(resolve => {
+        chrome.storage.local.set({ plan }, resolve);
+      });
+    } else {
+      // 웹 환경: localStorage 사용
+      localStorage.setItem('plan', JSON.stringify(plan));
+      return Promise.resolve();
+    }
   },
   async getAnswers() {
-    return new Promise(resolve => {
-      chrome.storage.local.get('answers', r => resolve(r.answers || null));
-    });
+    if (isChromeExtension) {
+      return new Promise(resolve => {
+        chrome.storage.local.get('answers', r => resolve(r.answers || null));
+      });
+    } else {
+      // 웹 환경: localStorage 사용
+      const stored = localStorage.getItem('answers');
+      return stored ? JSON.parse(stored) : null;
+    }
   },
   async saveAnswers(answers) {
-    return new Promise(resolve => {
-      chrome.storage.local.set({ answers }, resolve);
-    });
+    if (isChromeExtension) {
+      return new Promise(resolve => {
+        chrome.storage.local.set({ answers }, resolve);
+      });
+    } else {
+      // 웹 환경: localStorage 사용
+      localStorage.setItem('answers', JSON.stringify(answers));
+      return Promise.resolve();
+    }
   },
   async updateStepStatus(stepId, status) {
     const plan = await this.getPlan();
@@ -224,8 +250,15 @@ export const storage = {
     return plan;
   },
   async clearAll() {
-    return new Promise(resolve => {
-      chrome.storage.local.clear(resolve);
-    });
+    if (isChromeExtension) {
+      return new Promise(resolve => {
+        chrome.storage.local.clear(resolve);
+      });
+    } else {
+      // 웹 환경: localStorage 사용
+      localStorage.removeItem('plan');
+      localStorage.removeItem('answers');
+      return Promise.resolve();
+    }
   },
 };

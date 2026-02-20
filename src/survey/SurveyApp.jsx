@@ -66,13 +66,21 @@ export default function SurveyApp() {
   }
 
   function handleStart() {
-    // 클릭이 사용자 제스처이므로 같은 스택에서 사이드패널 열기 시도
-    chrome.windows.getCurrent().then(win => {
-      if (win?.id) chrome.sidePanel.open({ windowId: win.id });
-    }).catch(() => {
-      // 제스처 인정 안 되면 가이드 탭으로 이동
-      window.location.href = chrome.runtime.getURL('guide.html');
-    });
+    // Chrome Extension 환경인지 확인
+    if (typeof chrome !== 'undefined' && chrome.windows && chrome.sidePanel) {
+      // 클릭이 사용자 제스처이므로 같은 스택에서 사이드패널 열기 시도
+      chrome.windows.getCurrent().then(win => {
+        if (win?.id) chrome.sidePanel.open({ windowId: win.id });
+      }).catch(() => {
+        // 제스처 인정 안 되면 가이드 탭으로 이동
+        if (chrome.runtime && chrome.runtime.getURL) {
+          window.location.href = chrome.runtime.getURL('guide.html');
+        }
+      });
+    } else {
+      // 웹 환경: 결과를 표시하고 안내 메시지 표시
+      alert('가이드를 시작하려면 Chrome Extension을 설치해주세요.\n\n설문 결과는 저장되었습니다.');
+    }
   }
 
   if (showResult && plan) {
