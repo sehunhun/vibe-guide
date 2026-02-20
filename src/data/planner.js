@@ -98,7 +98,7 @@ function generateStepsForTool(tool, order, answers) {
   }));
 }
 
-/** 데모 모드: Google AI Studio → GitHub → Vercel 순서로 하드코딩된 플랜 */
+/** 데모 모드: Google AI Studio → Vercel 순서로 하드코딩된 플랜 */
 function buildDemoPlan(answers) {
   const googleTool = TOOLS.find(t => t.id === 'google-ai-studio');
   const vercelTool = TOOLS.find(t => t.id === 'vercel');
@@ -123,26 +123,14 @@ function buildDemoPlan(answers) {
       type: 'start',
     },
     {
-      stepId: 'demo_github_connect',
-      toolId: 'github',
-      toolName: 'GitHub',
-      toolIcon: '🐙',
-      order: 1,
-      status: 'pending',
-      title: '깃허브 연동',
-      desc: '만든 프로젝트를 GitHub 저장소에 연결하세요.',
-      url: 'https://github.com',
-      type: 'feature',
-    },
-    {
       stepId: 'demo_vercel_deploy',
       toolId: 'vercel',
       toolName: vercelTool.name,
       toolIcon: vercelTool.logo,
-      order: 2,
+      order: 1,
       status: 'pending',
       title: 'Vercel로 배포',
-      desc: 'Vercel에서 GitHub 저장소를 연결해 사이트를 배포하세요.',
+      desc: 'Vercel에서 사이트를 배포하세요.',
       url: vercelTool.url,
       type: 'deploy',
     },

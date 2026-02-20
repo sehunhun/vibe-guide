@@ -6,6 +6,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { QUESTIONS } from './tools.js';
 import { getDomainGuide, getDomainIdFromUrl } from './guides.js';
+import { PLAN_MODE } from './planner.js';
+import demoGuide from './guides/demo-guide.md';
 
 const MAX_HTML_LEN = 30000; // 토큰 절감용
 
@@ -85,6 +87,18 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
       domainGuide,
       '',
       '**중요**: 위 가이드 문서의 내용을 참고하여, 사용자가 실제로 수행할 수 있는 구체적인 단계를 안내해주세요. 가이드 문서에 나와있는 기능이나 버튼, 메뉴 등을 정확히 언급하세요.'
+    );
+  }
+
+  // 데모 모드일 때 데모 가이드 추가 (반드시 참고해야 함)
+  if (PLAN_MODE === 'demo') {
+    userParts.push(
+      `## ⚠️ 데모 버전 필수 가이드 (반드시 참고)`,
+      `다음은 데모 버전에서 반드시 따라야 하는 단계별 가이드입니다. 이 가이드의 순서를 정확히 따르고, 각 단계를 순서대로 안내해주세요.`,
+      '',
+      demoGuide,
+      '',
+      '**매우 중요**: 위 데모 가이드의 단계들을 정확히 순서대로 안내해주세요. 사용자가 현재 페이지에서 수행해야 할 단계가 가이드에 명시되어 있다면, 그 단계를 정확히 안내하세요. 가이드에 나와있는 버튼 이름, 메뉴 이름, 입력 칸 이름 등을 정확히 사용하세요.'
     );
   }
 

@@ -6,6 +6,7 @@
 
 // 가이드 문서를 정적 import (webpack의 raw-loader가 처리)
 import googleAiStudioGuide from './guides/google-ai-studio.md';
+import demoGuide from './guides/demo-guide.md';
 
 /**
  * 도메인 ID에 해당하는 가이드 문서 반환
