@@ -86,6 +86,135 @@ function spotlightElement(selector) {
   return { ok: true };
 }
 
+// 활성 단계 감시를 위한 변수
+let activeStepWatcher = null;
+let currentActiveStep = null;
+
+/** 활성 단계 감시 시작 */
+function startWatchingActiveStep(activeStep) {
+  // 기존 감시 중지
+  stopWatchingActiveStep();
+  
+  if (!activeStep || !activeStep.selector) return;
+  
+  currentActiveStep = activeStep;
+  const element = document.querySelector(activeStep.selector);
+  if (!element) return;
+  
+  // 요소가 DOM에 나타날 때까지 대기
+  const observer = new MutationObserver(() => {
+    const el = document.querySelector(activeStep.selector);
+    if (el && !activeStepWatcher) {
+      setupWatcher(el, activeStep);
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+  
+  // 즉시 확인
+  if (element) {
+    setupWatcher(element, activeStep);
+  }
+  
+  activeStepWatcher = observer;
+}
+
+/** 감시 중지 */
+function stopWatchingActiveStep() {
+  if (activeStepWatcher) {
+    activeStepWatcher.disconnect();
+    activeStepWatcher = null;
+  }
+  currentActiveStep = null;
+}
+
+/** 요소에 대한 액션 감지 설정 */
+function setupWatcher(element, activeStep) {
+  // 이미 감시 중이면 중복 방지
+  if (element.dataset.vibeGuideWatched === 'true') return;
+  element.dataset.vibeGuideWatched = 'true';
+  
+  // 클릭 감지
+  const clickHandler = (e) => {
+    // 같은 탭이고 같은 URL인지 확인
+    if (activeStep.url === location.href) {
+      chrome.runtime.sendMessage({
+        type: 'STEP_ACTION_DETECTED',
+        sourceUrl: activeStep.sourceUrl,
+        sourceIndex: activeStep.sourceIndex,
+        action: 'click',
+        url: location.href, // 현재 페이지 URL 포함
+      }).catch(() => {});
+    }
+  };
+  
+  // 입력 감지 (input, textarea, select 등)
+  const inputHandler = (e) => {
+    if (activeStep.url === location.href && e.target.value) {
+      chrome.runtime.sendMessage({
+        type: 'STEP_ACTION_DETECTED',
+        sourceUrl: activeStep.sourceUrl,
+        sourceIndex: activeStep.sourceIndex,
+        action: 'input',
+        url: location.href, // 현재 페이지 URL 포함
+      }).catch(() => {});
+    }
+  };
+  
+  // 변경 감지 (체크박스, 라디오 등)
+  const changeHandler = (e) => {
+    if (activeStep.url === location.href) {
+      chrome.runtime.sendMessage({
+        type: 'STEP_ACTION_DETECTED',
+        sourceUrl: activeStep.sourceUrl,
+        sourceIndex: activeStep.sourceIndex,
+        action: 'change',
+        url: location.href, // 현재 페이지 URL 포함
+      }).catch(() => {});
+    }
+  };
+  
+  // 이벤트 리스너 추가
+  element.addEventListener('click', clickHandler, true);
+  element.addEventListener('input', inputHandler, true);
+  element.addEventListener('change', changeHandler, true);
+  
+  // 요소가 제거되면 리스너도 제거
+  const removeObserver = new MutationObserver((mutations) => {
+    if (!document.contains(element)) {
+      element.removeEventListener('click', clickHandler, true);
+      element.removeEventListener('input', inputHandler, true);
+      element.removeEventListener('change', changeHandler, true);
+      removeObserver.disconnect();
+      delete element.dataset.vibeGuideWatched;
+    }
+  });
+  removeObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+// Storage 변경 감지하여 활성 단계 업데이트
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.activeStepForAutoComplete) {
+    const newValue = changes.activeStepForAutoComplete.newValue;
+    if (newValue && newValue.url === location.href) {
+      startWatchingActiveStep(newValue);
+    } else {
+      stopWatchingActiveStep();
+    }
+  }
+});
+
+// 페이지 로드 시 활성 단계 확인
+chrome.storage.local.get('activeStepForAutoComplete', (result) => {
+  const activeStep = result.activeStepForAutoComplete;
+  if (activeStep && activeStep.url === location.href) {
+    startWatchingActiveStep(activeStep);
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'GET_PAGE_HTML') {
     sendResponse({ html: getPageHtml(), url: location.href });

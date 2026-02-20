@@ -182,6 +182,43 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     });
   }, []);
 
+
+  // 자동 완료 메시지 리스너
+  useEffect(() => {
+    const handleAutoComplete = (msg) => {
+      if (msg.type === 'AUTO_COMPLETE_STEP') {
+        // 액션이 감지되면 해당 단계를 자동으로 완료 처리
+        // 수동 완료 버튼과 동일하게 checkUrl을 전달하지 않음 (pageUrl 사용)
+        savePageStepCompletion(msg.sourceUrl, msg.sourceIndex, true);
+      }
+    };
+    
+    chrome.runtime.onMessage.addListener(handleAutoComplete);
+    return () => chrome.runtime.onMessage.removeListener(handleAutoComplete);
+  }, [savePageStepCompletion]);
+
+  // 현재 활성 단계를 storage에 저장 (content script에서 감시용)
+  useEffect(() => {
+    if (!pageUrl || !currentTab?.tabId) return;
+    
+    const activeStep = findFirstIncompleteStep();
+    if (activeStep && activeStep.step.selector) {
+      chrome.storage.local.set({
+        activeStepForAutoComplete: {
+          tabId: currentTab.tabId,
+          url: pageUrl,
+          sourceUrl: activeStep.sourceUrl,
+          sourceIndex: activeStep.sourceIndex,
+          selector: activeStep.step.selector,
+          text: activeStep.step.text,
+        }
+      });
+    } else {
+      // 활성 단계가 없으면 제거
+      chrome.storage.local.remove('activeStepForAutoComplete');
+    }
+  }, [pageUrl, currentTab?.tabId, guidanceByUrl, pageStepCompletions, findFirstIncompleteStep]);
+
   // URL 변경 시: 툴 감지 및 도메인 변경 시 자동 AI 안내 요청
   useEffect(() => {
     if (currentTab?.hostname) {
@@ -199,19 +236,53 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     const previousDomain = previousDomainRef.current;
     
     // 현재 페이지가 선택된 도메인과 같은 도메인이면 선택 해제 (자동으로 현재 페이지 표시)
-    if (selectedDomainUrl && isSameDomain(url, selectedDomainUrl)) {
+    // 단, 다른 URL로 이동한 경우에만 선택 해제 (같은 도메인 내에서 이동 시에는 유지)
+    if (selectedDomainUrl && isSameDomain(url, selectedDomainUrl) && url !== selectedDomainUrl) {
       setSelectedDomainUrl(null);
     }
     
     // 도메인이 변경되었는지 확인
     const domainChanged = previousDomain !== null && currentDomain !== previousDomain;
     
-    // 캐시된 데이터 불러오기
-    chrome.storage.local.get('pageGuidanceCache', (r) => {
+    // 캐시된 데이터 불러오기 (같은 도메인의 모든 URL 포함)
+    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
       const cache = r.pageGuidanceCache || {};
+      const completions = r.pageStepCompletions || {};
       const cached = cache[url];
-      if (cached) {
-        setGuidanceByUrl(prev => ({ ...prev, [url]: cached }));
+      
+      // 같은 도메인의 모든 URL에서 캐시 로드
+      if (currentDomain) {
+        const domainCache = {};
+        const domainCompletions = {};
+        
+        for (const [cachedUrl, guidance] of Object.entries(cache)) {
+          if (guidance && isSameDomain(cachedUrl, url)) {
+            domainCache[cachedUrl] = guidance;
+            if (completions[cachedUrl]) {
+              domainCompletions[cachedUrl] = completions[cachedUrl];
+            }
+          }
+        }
+        
+        // state 업데이트
+        setGuidanceByUrl(prev => {
+          const merged = { ...prev };
+          Object.assign(merged, domainCache);
+          return merged;
+        });
+        setPageStepCompletions(prev => {
+          const merged = { ...prev };
+          Object.assign(merged, domainCompletions);
+          return merged;
+        });
+      } else {
+        // 도메인 추출 실패 시 현재 URL만 로드
+        if (cached) {
+          setGuidanceByUrl(prev => ({ ...prev, [url]: cached }));
+        }
+        if (completions[url]) {
+          setPageStepCompletions(prev => ({ ...prev, [url]: completions[url] }));
+        }
       }
       
       // 도메인이 변경되었고, 캐시된 데이터가 없으면 자동으로 AI 안내 요청
@@ -219,22 +290,87 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         // 플랜 사이트인지 확인
         if (plan && isPlanSiteOrSubpage(url, plan)) {
           setLoadingGuideUrl(url);
-          chrome.runtime.sendMessage({ type: 'GET_PAGE_GUIDANCE', tabId: currentTab.tabId }, (res) => {
-            setLoadingGuideUrl(null);
-            if (res?.error) {
-              const next = { ...cache, [url]: { error: res.error } };
-              setGuidanceByUrl(prev => ({ ...prev, [url]: { error: res.error } }));
-              chrome.storage.local.set({ pageGuidanceCache: next });
-            } else if (res?.steps?.length) {
-              const next = { ...cache, [url]: { steps: res.steps } };
-              setGuidanceByUrl(prev => ({ ...prev, [url]: { steps: res.steps } }));
-              chrome.storage.local.set({ pageGuidanceCache: next });
-            } else if (res?.text) {
-              const steps = [{ text: res.text, selector: res.selector || null }];
-              const next = { ...cache, [url]: { steps } };
-              setGuidanceByUrl(prev => ({ ...prev, [url]: { steps } }));
-              chrome.storage.local.set({ pageGuidanceCache: next });
-            }
+          chrome.storage.local.get('pageStepCompletions', (r2) => {
+            const completions = r2.pageStepCompletions || {};
+            chrome.runtime.sendMessage({ type: 'GET_PAGE_GUIDANCE', tabId: currentTab.tabId }, (res) => {
+              setLoadingGuideUrl(null);
+              if (res?.error) {
+                const next = { ...cache, [url]: { error: res.error } };
+                chrome.storage.local.set({ pageGuidanceCache: next }, () => {
+                  setGuidanceByUrl(prev => ({ ...prev, [url]: { error: res.error } }));
+                });
+              } else if (res?.steps?.length) {
+                const steps = res.steps;
+                const next = { ...cache, [url]: { steps } };
+                const nextCompletions = { ...completions, [url]: new Array(steps.length).fill(false) };
+                chrome.storage.local.set({ 
+                  pageGuidanceCache: next,
+                  pageStepCompletions: nextCompletions 
+                }, () => {
+                  // 저장 완료 후 같은 도메인의 모든 데이터 다시 로드
+                  const currentDomain = getDomainFromUrl(url);
+                  if (currentDomain) {
+                    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r3) => {
+                      const updatedCache = r3.pageGuidanceCache || {};
+                      const updatedCompletions = r3.pageStepCompletions || {};
+                      
+                      const domainCache = {};
+                      const domainCompletions = {};
+                      
+                      for (const [cachedUrl, guidance] of Object.entries(updatedCache)) {
+                        if (guidance && isSameDomain(cachedUrl, url)) {
+                          domainCache[cachedUrl] = guidance;
+                          if (updatedCompletions[cachedUrl]) {
+                            domainCompletions[cachedUrl] = updatedCompletions[cachedUrl];
+                          }
+                        }
+                      }
+                      
+                      setGuidanceByUrl(prev => ({ ...prev, ...domainCache }));
+                      setPageStepCompletions(prev => ({ ...prev, ...domainCompletions }));
+                    });
+                  } else {
+                    setGuidanceByUrl(prev => ({ ...prev, [url]: { steps } }));
+                    setPageStepCompletions(prev => ({ ...prev, [url]: new Array(steps.length).fill(false) }));
+                  }
+                });
+              } else if (res?.text) {
+                const steps = [{ text: res.text, selector: res.selector || null }];
+                const next = { ...cache, [url]: { steps } };
+                const nextCompletions = { ...completions, [url]: [false] };
+                chrome.storage.local.set({ 
+                  pageGuidanceCache: next,
+                  pageStepCompletions: nextCompletions 
+                }, () => {
+                  // 저장 완료 후 같은 도메인의 모든 데이터 다시 로드
+                  const currentDomain = getDomainFromUrl(url);
+                  if (currentDomain) {
+                    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r3) => {
+                      const updatedCache = r3.pageGuidanceCache || {};
+                      const updatedCompletions = r3.pageStepCompletions || {};
+                      
+                      const domainCache = {};
+                      const domainCompletions = {};
+                      
+                      for (const [cachedUrl, guidance] of Object.entries(updatedCache)) {
+                        if (guidance && isSameDomain(cachedUrl, url)) {
+                          domainCache[cachedUrl] = guidance;
+                          if (updatedCompletions[cachedUrl]) {
+                            domainCompletions[cachedUrl] = updatedCompletions[cachedUrl];
+                          }
+                        }
+                      }
+                      
+                      setGuidanceByUrl(prev => ({ ...prev, ...domainCache }));
+                      setPageStepCompletions(prev => ({ ...prev, ...domainCompletions }));
+                    });
+                  } else {
+                    setGuidanceByUrl(prev => ({ ...prev, [url]: { steps } }));
+                    setPageStepCompletions(prev => ({ ...prev, [url]: [false] }));
+                  }
+                });
+              }
+            });
           });
         }
       }
@@ -246,11 +382,39 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
 
   const handleOpenTool = (url) => {
     chrome.tabs.create({ url });
+    // 새 탭을 열 때는 selectedDomainUrl을 초기화하지 않음 (도메인별 캐시 유지)
   };
 
   /** 해당 도메인의 "이 페이지에서 할 일" 표시 */
   const handleSwitchToDomain = useCallback((url) => {
     setSelectedDomainUrl(url);
+    
+    // pageGuidanceCache에서 해당 도메인의 모든 항목 가져오기
+    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
+      const cache = r.pageGuidanceCache || {};
+      const completions = r.pageStepCompletions || {};
+      
+      // 같은 도메인의 모든 URL에서 캐시 수집
+      const targetDomain = getDomainFromUrl(url);
+      if (targetDomain) {
+        const domainCache = {};
+        const domainCompletions = {};
+        
+        for (const [cachedUrl, guidance] of Object.entries(cache)) {
+          if (guidance && isSameDomain(cachedUrl, url)) {
+            domainCache[cachedUrl] = guidance;
+            if (completions[cachedUrl]) {
+              domainCompletions[cachedUrl] = completions[cachedUrl];
+            }
+          }
+        }
+        
+        // state 업데이트 (기존 데이터와 병합)
+        setGuidanceByUrl(prev => ({ ...prev, ...domainCache }));
+        setPageStepCompletions(prev => ({ ...prev, ...domainCompletions }));
+      }
+    });
+    
     // 스크롤을 "이 페이지에서 할 일" 섹션으로 이동
     setTimeout(() => {
       if (pageGuidanceSectionRef.current) {
@@ -310,81 +474,92 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   }, [pageUrl, guidanceByUrl, pageStepCompletions]);
 
   /** 현재 탭에 대한 AI 안내 다시 요청 (이전 단계 유지하면서 다음 단계 추가) */
-  const handleRequestPageGuidance = useCallback(() => {
-    if (!currentTab?.tabId || !pageUrl) return;
+  const handleRequestPageGuidance = useCallback((targetUrl = null) => {
+    const urlToUse = targetUrl || pageUrl;
+    if (!currentTab?.tabId || !urlToUse) return;
     
-    // 최신 완료 상태를 직접 가져와서 확인
-    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
-      const cache = r.pageGuidanceCache || {};
-      const completions = r.pageStepCompletions || {};
+    // targetUrl이 제공되면 해당 URL의 탭을 찾아야 함
+    chrome.tabs.query({}, (tabs) => {
+      let targetTab = tabs.find(t => t.url === urlToUse);
+      if (!targetTab) {
+        // 탭을 찾지 못하면 현재 탭 사용
+        targetTab = { id: currentTab.tabId, url: urlToUse };
+      }
       
-      // 완료되지 않은 단계가 있는지 확인 (최신 상태 사용)
-      const currentDomain = getDomainFromUrl(pageUrl);
-      let incompleteStep = null;
-      
-      if (currentDomain) {
-        // 같은 도메인의 모든 단계 확인
-        const allSteps = [];
-        for (const [url, guidance] of Object.entries(cache)) {
-          if (guidance?.steps?.length && isSameDomain(url, pageUrl)) {
-            const urlCompletions = completions[url] || [];
-            guidance.steps.forEach((step, idx) => {
-              const isCompleted = urlCompletions[idx] === true;
-              if (!isCompleted && !incompleteStep) {
-                incompleteStep = {
-                  step,
-                  sourceUrl: url,
-                  sourceIndex: idx,
-                };
+      // 최신 완료 상태를 직접 가져와서 확인
+      chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
+        const cache = r.pageGuidanceCache || {};
+        const completions = r.pageStepCompletions || {};
+        
+        // 현재 URL에 할일이 있는지 먼저 확인
+        const currentGuidance = cache[urlToUse];
+        const hasCurrentGuidance = currentGuidance?.steps?.length > 0;
+        
+        // 현재 URL에 할일이 있으면 완료되지 않은 단계가 있는지 확인
+        if (hasCurrentGuidance) {
+          const currentDomain = getDomainFromUrl(urlToUse);
+          let incompleteStep = null;
+          
+          if (currentDomain) {
+            // 같은 도메인의 모든 단계 확인
+            for (const [url, guidance] of Object.entries(cache)) {
+              if (guidance?.steps?.length && isSameDomain(url, urlToUse)) {
+                const urlCompletions = completions[url] || [];
+                guidance.steps.forEach((step, idx) => {
+                  const isCompleted = urlCompletions[idx] === true;
+                  if (!isCompleted && !incompleteStep) {
+                    incompleteStep = {
+                      step,
+                      sourceUrl: url,
+                      sourceIndex: idx,
+                    };
+                  }
+                });
               }
+            }
+          } else {
+            // 도메인 추출 실패 시 현재 URL만 확인
+            const currentCompletions = completions[urlToUse] || [];
+            const incompleteIndex = currentCompletions.findIndex((done, idx) => !done && idx < currentGuidance.steps.length);
+            if (incompleteIndex >= 0) {
+              incompleteStep = {
+                step: currentGuidance.steps[incompleteIndex],
+                sourceUrl: urlToUse,
+                sourceIndex: incompleteIndex,
+              };
+            }
+          }
+          
+          if (incompleteStep) {
+            // 완료되지 않은 단계가 있으면 해당 페이지로 이동하고 메시지 표시
+            if (incompleteStep.sourceUrl !== urlToUse) {
+              // 다른 페이지에 있는 단계면 해당 페이지로 이동
+              chrome.tabs.update(targetTab.id, { url: incompleteStep.sourceUrl });
+            }
+            // 메시지 표시
+            setIncompleteStepMessage({
+              text: incompleteStep.step.text,
+              sourceUrl: incompleteStep.sourceUrl,
             });
+            // 5초 후 메시지 자동 숨김
+            setTimeout(() => setIncompleteStepMessage(null), 5000);
+            return;
           }
         }
-      } else {
-        // 도메인 추출 실패 시 현재 URL만 확인
-        const currentGuidance = cache[pageUrl];
-        if (currentGuidance?.steps?.length) {
-          const currentCompletions = completions[pageUrl] || [];
-          const incompleteIndex = currentCompletions.findIndex((done, idx) => !done && idx < currentGuidance.steps.length);
-          if (incompleteIndex >= 0) {
-            incompleteStep = {
-              step: currentGuidance.steps[incompleteIndex],
-              sourceUrl: pageUrl,
-              sourceIndex: incompleteIndex,
-            };
-          }
-        }
-      }
+        
+        // 메시지 초기화
+        setIncompleteStepMessage(null);
+        
+        // AI 안내 요청
+        setLoadingGuideUrl(urlToUse);
+        const existingSteps = cache[urlToUse]?.steps || [];
+        const existingCompleted = completions[urlToUse] || [];
       
-      if (incompleteStep) {
-        // 완료되지 않은 단계가 있으면 해당 페이지로 이동하고 메시지 표시
-        if (incompleteStep.sourceUrl !== pageUrl) {
-          // 다른 페이지에 있는 단계면 해당 페이지로 이동
-          chrome.tabs.update(currentTab.tabId, { url: incompleteStep.sourceUrl });
-        }
-        // 메시지 표시
-        setIncompleteStepMessage({
-          text: incompleteStep.step.text,
-          sourceUrl: incompleteStep.sourceUrl,
-        });
-        // 5초 후 메시지 자동 숨김
-        setTimeout(() => setIncompleteStepMessage(null), 5000);
-        return;
-      }
-      
-      // 메시지 초기화
-      setIncompleteStepMessage(null);
-      
-      // AI 안내 요청
-      setLoadingGuideUrl(pageUrl);
-      const existingSteps = cache[pageUrl]?.steps || [];
-      const existingCompleted = completions[pageUrl] || [];
-      
-      chrome.runtime.sendMessage({ type: 'GET_PAGE_GUIDANCE', tabId: currentTab.tabId }, (res) => {
+      chrome.runtime.sendMessage({ type: 'GET_PAGE_GUIDANCE', tabId: targetTab.id }, (res) => {
         setLoadingGuideUrl(null);
         if (res?.error) {
-          const next = { ...cache, [pageUrl]: { error: res.error } };
-          setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { error: res.error } }));
+          const next = { ...cache, [urlToUse]: { error: res.error } };
+          setGuidanceByUrl(prev => ({ ...prev, [urlToUse]: { error: res.error } }));
           chrome.storage.local.set({ pageGuidanceCache: next });
         } else if (res?.steps?.length) {
           // 모든 단계가 완료된 상태에서 AI가 새로운 단계를 생성하지 못한 경우를 추적
@@ -420,14 +595,50 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             mergedCompleted = new Array(mergedSteps.length).fill(false);
           }
           
-          const next = { ...cache, [pageUrl]: { steps: mergedSteps } };
-          setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { steps: mergedSteps } }));
-          chrome.storage.local.set({ pageGuidanceCache: next });
+          const next = { ...cache, [urlToUse]: { steps: mergedSteps } };
+          const nextCompletions = { ...completions, [urlToUse]: mergedCompleted };
           
-          // 완료 상태 저장
-          const nextCompletions = { ...completions, [pageUrl]: mergedCompleted };
-          chrome.storage.local.set({ pageStepCompletions: nextCompletions });
-          setPageStepCompletions(nextCompletions);
+          // storage에 저장
+          chrome.storage.local.set({ 
+            pageGuidanceCache: next,
+            pageStepCompletions: nextCompletions 
+          }, () => {
+            // 저장 완료 후 state 업데이트 및 같은 도메인의 모든 데이터 다시 로드
+            const currentDomain = getDomainFromUrl(urlToUse);
+            if (currentDomain) {
+              chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
+                const updatedCache = r.pageGuidanceCache || {};
+                const updatedCompletions = r.pageStepCompletions || {};
+                
+                const domainCache = {};
+                const domainCompletions = {};
+                
+                for (const [cachedUrl, guidance] of Object.entries(updatedCache)) {
+                  if (guidance && isSameDomain(cachedUrl, urlToUse)) {
+                    domainCache[cachedUrl] = guidance;
+                    if (updatedCompletions[cachedUrl]) {
+                      domainCompletions[cachedUrl] = updatedCompletions[cachedUrl];
+                    }
+                  }
+                }
+                
+                // state를 확실히 업데이트 (이전 state와 병합)
+                setGuidanceByUrl(prev => {
+                  const merged = { ...prev };
+                  Object.assign(merged, domainCache);
+                  return merged;
+                });
+                setPageStepCompletions(prev => {
+                  const merged = { ...prev };
+                  Object.assign(merged, domainCompletions);
+                  return merged;
+                });
+              });
+            } else {
+              setGuidanceByUrl(prev => ({ ...prev, [urlToUse]: { steps: mergedSteps } }));
+              setPageStepCompletions(prev => ({ ...prev, [urlToUse]: mergedCompleted }));
+            }
+          });
         } else if (Array.isArray(res?.steps) && res.steps.length === 0) {
           // AI가 빈 배열을 반환한 경우 (더 이상 단계가 없음)
           // 완료 메시지를 steps에 추가 (기존 단계 유지)
@@ -439,18 +650,54 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
           
           // 기존 단계들을 유지하면서 완료 메시지만 추가
           const mergedSteps = [...existingSteps, completionMessage];
-          const next = { ...cache, [pageUrl]: { steps: mergedSteps } };
-          setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { steps: mergedSteps } }));
-          chrome.storage.local.set({ pageGuidanceCache: next });
-          
-          // 완료 상태 저장 (기존 완료 상태 유지 + 완료 메시지는 자동으로 완료된 것으로 표시)
           const mergedCompleted = [...existingCompleted, true];
-          const nextCompletions = { ...completions, [pageUrl]: mergedCompleted };
-          chrome.storage.local.set({ pageStepCompletions: nextCompletions });
-          setPageStepCompletions(nextCompletions);
+          const next = { ...cache, [urlToUse]: { steps: mergedSteps } };
+          const nextCompletions = { ...completions, [urlToUse]: mergedCompleted };
+          
+          // storage에 저장
+          chrome.storage.local.set({ 
+            pageGuidanceCache: next,
+            pageStepCompletions: nextCompletions 
+          }, () => {
+            // 저장 완료 후 state 업데이트
+            const currentDomain = getDomainFromUrl(urlToUse);
+            if (currentDomain) {
+              chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
+                const updatedCache = r.pageGuidanceCache || {};
+                const updatedCompletions = r.pageStepCompletions || {};
+                
+                const domainCache = {};
+                const domainCompletions = {};
+                
+                for (const [cachedUrl, guidance] of Object.entries(updatedCache)) {
+                  if (guidance && isSameDomain(cachedUrl, urlToUse)) {
+                    domainCache[cachedUrl] = guidance;
+                    if (updatedCompletions[cachedUrl]) {
+                      domainCompletions[cachedUrl] = updatedCompletions[cachedUrl];
+                    }
+                  }
+                }
+                
+                // state를 확실히 업데이트 (이전 state와 병합)
+                setGuidanceByUrl(prev => {
+                  const merged = { ...prev };
+                  Object.assign(merged, domainCache);
+                  return merged;
+                });
+                setPageStepCompletions(prev => {
+                  const merged = { ...prev };
+                  Object.assign(merged, domainCompletions);
+                  return merged;
+                });
+              });
+            } else {
+              setGuidanceByUrl(prev => ({ ...prev, [urlToUse]: { steps: mergedSteps } }));
+              setPageStepCompletions(prev => ({ ...prev, [urlToUse]: mergedCompleted }));
+            }
+          });
           
           // 도메인 완료 플래그 설정
-          const currentDomain = getDomainFromUrl(pageUrl);
+          const currentDomain = getDomainFromUrl(urlToUse);
           if (currentDomain) {
             chrome.storage.local.get('domainCompletions', (r) => {
               const domainCompletions = r.domainCompletions || {};
@@ -473,10 +720,55 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
           const steps = [{ text: res.text, selector: res.selector || null }];
           // 이전 단계가 있으면 유지하고 새 단계 추가
           const mergedSteps = existingSteps.length > 0 ? [...existingSteps, ...steps] : steps;
-          const next = { ...cache, [pageUrl]: { steps: mergedSteps } };
-          setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { steps: mergedSteps } }));
-          chrome.storage.local.set({ pageGuidanceCache: next });
+          const mergedCompleted = existingSteps.length > 0 
+            ? [...existingCompleted, false] 
+            : [false];
+          const next = { ...cache, [urlToUse]: { steps: mergedSteps } };
+          const nextCompletions = { ...completions, [urlToUse]: mergedCompleted };
+          
+          // storage에 저장
+          chrome.storage.local.set({ 
+            pageGuidanceCache: next,
+            pageStepCompletions: nextCompletions 
+          }, () => {
+            // 저장 완료 후 state 업데이트 및 같은 도메인의 모든 데이터 다시 로드
+            const currentDomain = getDomainFromUrl(urlToUse);
+            if (currentDomain) {
+              chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
+                const updatedCache = r.pageGuidanceCache || {};
+                const updatedCompletions = r.pageStepCompletions || {};
+                
+                const domainCache = {};
+                const domainCompletions = {};
+                
+                for (const [cachedUrl, guidance] of Object.entries(updatedCache)) {
+                  if (guidance && isSameDomain(cachedUrl, urlToUse)) {
+                    domainCache[cachedUrl] = guidance;
+                    if (updatedCompletions[cachedUrl]) {
+                      domainCompletions[cachedUrl] = updatedCompletions[cachedUrl];
+                    }
+                  }
+                }
+                
+                // state를 확실히 업데이트 (이전 state와 병합)
+                setGuidanceByUrl(prev => {
+                  const merged = { ...prev };
+                  Object.assign(merged, domainCache);
+                  return merged;
+                });
+                setPageStepCompletions(prev => {
+                  const merged = { ...prev };
+                  Object.assign(merged, domainCompletions);
+                  return merged;
+                });
+              });
+            } else {
+              setGuidanceByUrl(prev => ({ ...prev, [urlToUse]: { steps: mergedSteps } }));
+              setPageStepCompletions(prev => ({ ...prev, [urlToUse]: mergedCompleted }));
+            }
+          });
         }
+      });
       });
     });
   }, [currentTab?.tabId, pageUrl]);
@@ -531,7 +823,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   }, []);
 
   /** UI 단계 완료 토글 저장 (같은 도메인 내에서 sourceUrl 기반으로 관리) */
-  const savePageStepCompletion = useCallback((sourceUrl, stepIndex, done) => {
+  const savePageStepCompletion = useCallback((sourceUrl, stepIndex, done, checkUrl = null) => {
     chrome.storage.local.get(['pageStepCompletions', 'pageGuidanceCache'], (r) => {
       const all = r.pageStepCompletions || {};
       const cache = r.pageGuidanceCache || {};
@@ -543,49 +835,60 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         setPageStepCompletions(next);
         
         // 완료 버튼을 눌렀을 때 (done === true) 모든 단계가 완료되었는지 확인
-        if (done && pageUrl) {
-          // 같은 도메인의 모든 단계 확인
-          const currentDomain = getDomainFromUrl(pageUrl);
-          if (currentDomain) {
-            // 같은 도메인의 모든 단계 수집
-            const allSteps = [];
-            for (const [url, guidance] of Object.entries(cache)) {
-              if (guidance?.steps?.length && isSameDomain(url, pageUrl)) {
-                const urlCompletions = url === sourceUrl ? next[url] : (all[url] || []);
-                guidance.steps.forEach((step, idx) => {
-                  allSteps.push({
-                    step,
-                    sourceUrl: url,
-                    sourceIndex: idx,
-                    completed: urlCompletions[idx] === true,
+        // 저장 완료 후 최신 상태를 다시 가져와서 확인 (다른 탭에서 동시에 완료된 경우 대비)
+        if (done) {
+          chrome.storage.local.get(['pageStepCompletions', 'pageGuidanceCache'], (r) => {
+            const latestCompletions = r.pageStepCompletions || {};
+            const latestCache = r.pageGuidanceCache || {};
+            
+            // checkUrl이 제공되면 사용하고, 없으면 pageUrl 사용
+            const urlToCheck = checkUrl || pageUrl;
+            if (!urlToCheck) return;
+            
+            // 같은 도메인의 모든 단계 확인
+            const currentDomain = getDomainFromUrl(urlToCheck);
+            if (currentDomain) {
+              // 같은 도메인의 모든 단계 수집
+              const allSteps = [];
+              for (const [url, guidance] of Object.entries(latestCache)) {
+                if (guidance?.steps?.length && isSameDomain(url, urlToCheck)) {
+                  const urlCompletions = latestCompletions[url] || [];
+                  guidance.steps.forEach((step, idx) => {
+                    allSteps.push({
+                      step,
+                      sourceUrl: url,
+                      sourceIndex: idx,
+                      completed: urlCompletions[idx] === true,
+                    });
                   });
-                });
+                }
               }
-            }
-            
-            // 모든 단계가 완료되었는지 확인
-            const allCompleted = allSteps.length > 0 && allSteps.every(item => item.completed);
-            
-            if (allCompleted) {
-              // 모든 단계가 완료되었을 때만 자동으로 다음 단계 요청
-              setTimeout(() => {
-                handleRequestPageGuidance();
-              }, 300);
-            }
-          } else {
-            // 도메인 추출 실패 시 현재 URL만 확인
-            const currentGuidance = cache[pageUrl];
-            if (currentGuidance?.steps?.length) {
-              const currentCompletions = pageUrl === sourceUrl ? next[pageUrl] : (all[pageUrl] || []);
-              const allCompleted = currentGuidance.steps.every((_, idx) => currentCompletions[idx] === true);
+              
+              // 모든 단계가 완료되었는지 확인
+              const allCompleted = allSteps.length > 0 && allSteps.every(item => item.completed);
               
               if (allCompleted) {
+                // 모든 단계가 완료되었을 때만 자동으로 다음 단계 요청
+                // urlToCheck를 전달하여 올바른 URL에서 다음 단계 요청
                 setTimeout(() => {
-                  handleRequestPageGuidance();
+                  handleRequestPageGuidance(urlToCheck);
                 }, 300);
               }
+            } else {
+              // 도메인 추출 실패 시 현재 URL만 확인
+              const currentGuidance = latestCache[urlToCheck];
+              if (currentGuidance?.steps?.length) {
+                const currentCompletions = latestCompletions[urlToCheck] || [];
+                const allCompleted = currentGuidance.steps.every((_, idx) => currentCompletions[idx] === true);
+                
+                if (allCompleted) {
+                  setTimeout(() => {
+                    handleRequestPageGuidance(urlToCheck);
+                  }, 300);
+                }
+              }
             }
-          }
+          });
         }
       });
     });
@@ -603,6 +906,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     if (!targetDomain) return guidanceByUrl[displayUrl] || null;
     
     // 같은 도메인의 모든 URL에서 단계 수집
+    // guidanceByUrl state에서 같은 도메인의 모든 항목 찾기
     const allSteps = [];
     const urlToSteps = {};
     
@@ -751,7 +1055,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
       </div>
 
       {/* 이 페이지에서 할 일 (AI 단계별 가이드) - URL별 캐시 유지 */}
-      {currentTab?.tabId && (
+      {currentTab?.tabId && pageUrl && !pageUrl.startsWith('chrome://') && !pageUrl.startsWith('chrome-extension://') && (
         <div className="page-guidance-section" ref={pageGuidanceSectionRef}>
           <h3 className="page-guidance-title">{pageGuidanceTitle}</h3>
           {incompleteStepMessage && (

@@ -164,6 +164,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'STEP_ACTION_DETECTED') {
+    // content script에서 감지한 액션을 sidepanel로 전달
+    chrome.runtime.sendMessage({
+      type: 'AUTO_COMPLETE_STEP',
+      sourceUrl: msg.sourceUrl,
+      sourceIndex: msg.sourceIndex,
+      action: msg.action,
+      url: msg.url, // 현재 페이지 URL 전달
+    }).catch(() => {});
+    return false;
+  }
+
   if (msg.type === 'URL_CHANGED' && sender.tab?.id) {
     notifyTabChange(sender.tab.id, msg.url);
   }
