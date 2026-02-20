@@ -3,12 +3,15 @@ import Survey from './Survey.jsx';
 import Guide from './Guide.jsx';
 import Settings from './Settings.jsx';
 import { storage } from '../data/planner.js';
+import { hasValidApiKey } from '../data/ai.js';
 
 // 화면 종류: 'survey' | 'guide' | 'settings'
 export default function App() {
   const [screen, setScreen] = useState(null); // null = 로딩중
   const [plan, setPlan] = useState(null);
   const [currentTab, setCurrentTab] = useState(null);
+  // 가이드 진입 시 API 키 유효 여부 (null=미확인, true/false)
+  const [apiKeyValid, setApiKeyValid] = useState(null);
 
   // 초기 로드: 저장된 plan 여부 확인
   useEffect(() => {
@@ -21,6 +24,12 @@ export default function App() {
       }
     });
   }, []);
+
+  // 가이드 화면일 때 API 키 확인 (설정에서 돌아왔을 때도 재확인)
+  useEffect(() => {
+    if (screen !== 'guide') return;
+    hasValidApiKey().then(setApiKeyValid);
+  }, [screen]);
 
   // Background → sidePanel: 탭 변경 이벤트 수신
   useEffect(() => {
@@ -99,7 +108,22 @@ export default function App() {
         {screen === 'survey' && (
           <Survey onComplete={handleSurveyComplete} />
         )}
-        {screen === 'guide' && (
+        {screen === 'guide' && apiKeyValid === null && (
+          <div className="loading guide-key-check">
+            <div className="loading-spinner" />
+            <p className="guide-key-check-text">설정 확인 중...</p>
+          </div>
+        )}
+        {screen === 'guide' && apiKeyValid === false && (
+          <div className="guide-key-required">
+            <p className="guide-key-required-title">🔑 API 키가 필요해요</p>
+            <p className="guide-key-required-desc">AI 안내를 사용하려면 설정에서 사용할 모델의 API 키를 입력해주세요.</p>
+            <button type="button" className="btn-primary" onClick={() => setScreen('settings')}>
+              설정에서 API 키 입력하기
+            </button>
+          </div>
+        )}
+        {screen === 'guide' && apiKeyValid === true && (
           <Guide
             plan={plan}
             currentTab={currentTab}

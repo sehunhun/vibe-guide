@@ -66,7 +66,13 @@ export default function SurveyApp() {
   }
 
   function handleStart() {
-    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
+    // 클릭이 사용자 제스처이므로 같은 스택에서 사이드패널 열기 시도
+    chrome.windows.getCurrent().then(win => {
+      if (win?.id) chrome.sidePanel.open({ windowId: win.id });
+    }).catch(() => {
+      // 제스처 인정 안 되면 가이드 탭으로 이동
+      window.location.href = chrome.runtime.getURL('guide.html');
+    });
   }
 
   if (showResult && plan) {

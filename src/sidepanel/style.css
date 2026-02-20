@@ -82,6 +82,22 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.guide-key-check {
+  flex-direction: column;
+  gap: 12px;
+  min-height: 120px;
+}
+.guide-key-check-text { font-size: 12px; color: var(--text2); }
+
+.guide-key-required {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0;
+}
+.guide-key-required-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.guide-key-required-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
 /* ===== 공통 버튼 ===== */
 .btn-primary {
   background: var(--accent);
@@ -298,10 +314,177 @@ body {
   color: var(--yellow);
 }
 
+/* 이 페이지에서 할 일 (AI 안내) */
+.page-guidance-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.page-guidance-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+.btn-guidance-request { width: 100%; }
+.page-guidance-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.page-guidance-error {
+  font-size: 12px;
+  color: var(--red);
+}
+.page-guidance-error p { margin-bottom: 8px; }
+.page-guidance-result { display: flex; flex-direction: column; gap: 10px; }
+.page-guidance-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* 단계별 가이드 */
+.page-guidance-steps { display: flex; flex-direction: column; gap: 10px; }
+.page-guidance-step {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.page-guidance-step.done { opacity: 0.75; border-color: var(--green-dim); }
+.page-guidance-step-header { display: flex; gap: 8px; margin-bottom: 8px; }
+.page-guidance-step-num {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+}
+.page-guidance-step.done .page-guidance-step-num { background: var(--green-dim); color: var(--green); }
+.page-guidance-step-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  flex: 1;
+}
+.page-guidance-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.page-guidance-progress { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.page-guidance-progress-text { font-size: 11px; color: var(--text2); }
+
+.btn-spotlight {
+  align-self: flex-start;
+  padding: 6px 12px;
+  font-size: 11px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.btn-spotlight:hover { background: rgba(124, 111, 247, 0.25); }
+.btn-sm { font-size: 11px; padding: 6px 10px; }
+
 .guide-progress {
   background: var(--bg2);
   border-radius: var(--radius);
   padding: 12px;
+}
+.guide-progress-icons .progress-bar { margin-bottom: 10px; }
+.progress-tool-icons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.progress-tool-icon {
+  font-size: 18px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.progress-tool-icon.done { opacity: 1; }
+
+.progress-site-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.progress-site-link-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.progress-site-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s, color 0.15s;
+  flex: 1;
+}
+.progress-site-link:hover {
+  background: var(--accent-dim);
+  color: var(--accent-hover);
+}
+.progress-site-link.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+}
+.progress-site-link-num {
+  font-weight: 600;
+  color: var(--text2);
+  min-width: 1.25em;
+}
+.progress-site-link-icon { font-size: 16px; }
+.progress-site-link-label { font-weight: 500; }
+.progress-site-link-clip {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text3);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.progress-site-link-clip:hover {
+  background: var(--bg2);
+  color: var(--text2);
 }
 .progress-info {
   display: flex;
