@@ -7,15 +7,5 @@
       "source": "/",
       "destination": "/survey.html"
     }
-  ],
-  "routes": [
-    {
-      "src": "/survey.js",
-      "dest": "/survey.js"
-    },
-    {
-      "src": "/survey.html",
-      "dest": "/survey.html"
-    }
   ]
 }
