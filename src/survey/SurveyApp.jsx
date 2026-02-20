@@ -84,7 +84,7 @@ export default function SurveyApp() {
       <header className="survey-header">
         <div className="logo">
           <span className="logo-icon">⚡</span>
-          <span className="logo-text">VibeGuide</span>
+          <span className="logo-text">UserUse</span>
         </div>
         <span className="step-badge">{step + 1} / {totalSteps}</span>
       </header>
@@ -179,7 +179,7 @@ function PlanResult({ plan, onStart }) {
       <header className="survey-header">
         <div className="logo">
           <span className="logo-icon">⚡</span>
-          <span className="logo-text">VibeGuide</span>
+          <span className="logo-text">UserUse</span>
         </div>
       </header>
 

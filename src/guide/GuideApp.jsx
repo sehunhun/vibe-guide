@@ -137,7 +137,7 @@ export default function GuideApp() {
       <header className="guide-header">
         <div className="logo">
           <span className="logo-icon">⚡</span>
-          <span className="logo-text">VibeGuide</span>
+          <span className="logo-text">UserUse</span>
         </div>
         <div className="header-right">
           <span className="progress-badge">{pct}%</span>

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/survey.html"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/survey.js",
+      "dest": "/survey.js"
+    },
+    {
+      "src": "/survey.html",
+      "dest": "/survey.html"
+    }
+  ]
+}

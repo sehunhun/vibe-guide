@@ -88,7 +88,7 @@ export default function App() {
       <header className="app-header">
         <div className="header-logo">
           <span className="logo-icon">⚡</span>
-          <span className="logo-text">VibeGuide</span>
+          <span className="logo-text">UserUse</span>
         </div>
         <div className="header-actions">
           {screen === 'guide' && (
