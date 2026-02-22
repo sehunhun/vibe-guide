@@ -1,31 +1,22 @@
 import React, { useState, useEffect } from 'react';
 
 const AI_MODELS = [
-  { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', desc: '가장 똑똑함, 비용 중간' },
-  { id: 'gpt-4o-mini', label: 'GPT-4o mini', provider: 'openai', desc: '빠르고 저렴함' },
-  { id: 'claude-3-5-haiku', label: 'Claude 3.5 Haiku', provider: 'anthropic', desc: '빠르고 저렴, 코딩 강점' },
-  { id: 'claude-3-7-sonnet', label: 'Claude 3.7 Sonnet', provider: 'anthropic', desc: '균형잡힌 성능' },
-  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'google', desc: '빠르고 다재다능, Google AI' },
+  { id: 'gpt-4o', label: 'GPT-4o', desc: '가장 똑똑함, 비용 중간' },
+  { id: 'gpt-4o-mini', label: 'GPT-4o mini', desc: '빠르고 저렴함' },
 ];
 
 export default function Settings({ onBack }) {
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
-  const [apiKeys, setApiKeys] = useState({ openai: '', anthropic: '', google: '' });
   const [saved, setSaved] = useState(false);
-  const [showKey, setShowKey] = useState({ openai: false, anthropic: false, google: false });
 
   useEffect(() => {
-    chrome.storage.local.get(['aiModel', 'apiKeys'], (r) => {
+    chrome.storage.local.get(['aiModel'], (r) => {
       if (r.aiModel) setSelectedModel(r.aiModel);
-      if (r.apiKeys) setApiKeys(r.apiKeys);
     });
   }, []);
 
-  const selectedModelInfo = AI_MODELS.find(m => m.id === selectedModel);
-  const requiredProvider = selectedModelInfo?.provider;
-
   const handleSave = () => {
-    chrome.storage.local.set({ aiModel: selectedModel, apiKeys }, () => {
+    chrome.storage.local.set({ aiModel: selectedModel }, () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     });
@@ -49,9 +40,7 @@ export default function Settings({ onBack }) {
               onClick={() => setSelectedModel(model.id)}
             >
               <div className="model-left">
-                <span className="provider-badge">
-                  {model.provider === 'openai' ? '🟢' : model.provider === 'google' ? '🔵' : '🟣'}
-                </span>
+                <span className="provider-badge">🟢</span>
                 <div>
                   <span className="model-label">{model.label}</span>
                   <span className="model-desc">{model.desc}</span>
@@ -61,119 +50,6 @@ export default function Settings({ onBack }) {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="settings-section">
-        <h3>API 키</h3>
-        <p className="settings-desc">
-          선택한 모델({selectedModelInfo?.label})은{' '}
-          <strong>
-          {requiredProvider === 'openai' ? 'OpenAI' : requiredProvider === 'google' ? 'Google AI' : 'Anthropic'}
-        </strong> API 키가 필요해요
-        </p>
-
-        {/* OpenAI */}
-        {requiredProvider === 'openai' && (
-          <div className="api-key-field">
-            <label>
-              OpenAI API Key
-              <a
-                href="#"
-                className="get-key-link"
-                onClick={(e) => {
-                  e.preventDefault();
-                  chrome.tabs.create({ url: 'https://platform.openai.com/api-keys' });
-                }}
-              >
-                키 발급받기 →
-              </a>
-            </label>
-            <div className="input-wrapper">
-              <input
-                type={showKey.openai ? 'text' : 'password'}
-                placeholder="sk-..."
-                value={apiKeys.openai}
-                onChange={e => setApiKeys(prev => ({ ...prev, openai: e.target.value }))}
-              />
-              <button
-                className="btn-toggle-key"
-                onClick={() => setShowKey(prev => ({ ...prev, openai: !prev.openai }))}
-              >
-                {showKey.openai ? '🙈' : '👁️'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Google */}
-        {requiredProvider === 'google' && (
-          <div className="api-key-field">
-            <label>
-              Google AI API Key
-              <a
-                href="#"
-                className="get-key-link"
-                onClick={(e) => {
-                  e.preventDefault();
-                  chrome.tabs.create({ url: 'https://aistudio.google.com/apikey' });
-                }}
-              >
-                키 발급받기 →
-              </a>
-            </label>
-            <div className="input-wrapper">
-              <input
-                type={showKey.google ? 'text' : 'password'}
-                placeholder="AIza..."
-                value={apiKeys.google}
-                onChange={e => setApiKeys(prev => ({ ...prev, google: e.target.value }))}
-              />
-              <button
-                className="btn-toggle-key"
-                onClick={() => setShowKey(prev => ({ ...prev, google: !prev.google }))}
-              >
-                {showKey.google ? '🙈' : '👁️'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Anthropic */}
-        {requiredProvider === 'anthropic' && (
-          <div className="api-key-field">
-            <label>
-              Anthropic API Key
-              <a
-                href="#"
-                className="get-key-link"
-                onClick={(e) => {
-                  e.preventDefault();
-                  chrome.tabs.create({ url: 'https://console.anthropic.com/settings/keys' });
-                }}
-              >
-                키 발급받기 →
-              </a>
-            </label>
-            <div className="input-wrapper">
-              <input
-                type={showKey.anthropic ? 'text' : 'password'}
-                placeholder="sk-ant-..."
-                value={apiKeys.anthropic}
-                onChange={e => setApiKeys(prev => ({ ...prev, anthropic: e.target.value }))}
-              />
-              <button
-                className="btn-toggle-key"
-                onClick={() => setShowKey(prev => ({ ...prev, anthropic: !prev.anthropic }))}
-              >
-                {showKey.anthropic ? '🙈' : '👁️'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <p className="key-notice">
-          🔒 API 키는 브라우저 로컬에만 저장되며 외부로 전송되지 않아요
-        </p>
       </div>
 
       <button className={`btn-primary btn-save ${saved ? 'saved' : ''}`} onClick={handleSave}>

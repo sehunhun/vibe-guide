@@ -116,10 +116,10 @@ export default function App() {
         )}
         {screen === 'guide' && apiKeyValid === false && (
           <div className="guide-key-required">
-            <p className="guide-key-required-title">🔑 API 키가 필요해요</p>
-            <p className="guide-key-required-desc">AI 안내를 사용하려면 설정에서 사용할 모델의 API 키를 입력해주세요.</p>
+            <p className="guide-key-required-title">🔑 백엔드 서버 URL이 필요해요</p>
+            <p className="guide-key-required-desc">AI 안내를 사용하려면 설정에서 백엔드 서버 URL을 입력해주세요.</p>
             <button type="button" className="btn-primary" onClick={() => setScreen('settings')}>
-              설정에서 API 키 입력하기
+              설정에서 백엔드 URL 입력하기
             </button>
           </div>
         )}

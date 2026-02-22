@@ -1,9 +1,8 @@
 /**
  * AI API: 설문 + 플랜 + 페이지(HTML 또는 이미지) → "이 페이지에서 할 일" + 선택자
- * OpenAI / Anthropic / Google 지원 (Google은 @google/genai SDK 사용)
+ * 백엔드 서버를 통해 OpenAI API 호출
  */
 
-import { GoogleGenAI } from '@google/genai';
 import { QUESTIONS } from './tools.js';
 import { getDomainGuide, getDomainIdFromUrl } from './guides.js';
 import { PLAN_MODE } from './planner.js';
@@ -148,160 +147,56 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
   return { system, user: userParts.join('\n') };
 }
 
+// 백엔드 서버 URL (하드코딩)
+const BACKEND_URL = 'https://your-app.railway.app'; // Railway 배포 후 여기에 실제 URL 입력
+
 /**
  * 저장된 AI 설정 조회 (background에서 호출)
  */
 export function getStoredAISettings() {
   return new Promise(resolve => {
-    chrome.storage.local.get(['aiModel', 'apiKeys'], r => {
+    chrome.storage.local.get(['aiModel'], r => {
       resolve({
         modelId: r.aiModel || 'gpt-4o-mini',
-        apiKeys: r.apiKeys || { openai: '', anthropic: '', google: '' },
+        backendUrl: BACKEND_URL,
       });
     });
   });
 }
 
-/** 모델 ID → provider */
-const MODEL_PROVIDER = {
-  'gpt-4o': 'openai',
-  'gpt-4o-mini': 'openai',
-  'claude-3-5-haiku': 'anthropic',
-  'claude-3-7-sonnet': 'anthropic',
-  'gemini-2.5-flash': 'google',
-};
-
 /**
- * OpenAI Chat Completions
+ * 백엔드 API 호출
  */
-async function callOpenAI(modelId, apiKey, messages, imageDataUrl) {
-  const content = [{ type: 'text', text: messages.user }];
-  if (imageDataUrl) {
-    content.push({
-      type: 'image_url',
-      image_url: { url: imageDataUrl.startsWith('data:') ? imageDataUrl : `data:image/png;base64,${imageDataUrl}` },
-    });
+async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl) {
+  if (!backendUrl || !backendUrl.trim()) {
+    throw new Error('백엔드 서버 URL을 설정해주세요.');
   }
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  // 백엔드 URL 정규화 (끝에 / 제거)
+  const baseUrl = backendUrl.trim().replace(/\/$/, '');
+  const apiUrl = `${baseUrl}/api/guidance`;
+
+  const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
+      system: messages.system,
+      user: messages.user,
       model: modelId,
-      messages: [
-        { role: 'system', content: messages.system },
-        { role: 'user', content },
-      ],
-      max_tokens: 2048,
+      page_context_type: pageContextType,
+      page_context_content: imageDataUrl || null,
     }),
   });
+
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`OpenAI ${res.status}: ${err}`);
+    throw new Error(`백엔드 API 오류 (${res.status}): ${err}`);
   }
+
   const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content?.trim() || '';
-  return parseAIResponse(raw);
-}
-
-/**
- * Anthropic Messages API
- */
-async function callAnthropic(modelId, apiKey, messages, imageDataUrl) {
-  const content = [{ type: 'text', text: messages.user }];
-  if (imageDataUrl) {
-    const base64 = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
-    content.push({
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: base64 },
-    });
-  }
-
-  const res = await fetch(
-    'https://api.anthropic.com/v1/messages',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: modelId,
-        max_tokens: 2048,
-        system: messages.system,
-        messages: [{ role: 'user', content }],
-      }),
-    },
-  );
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Anthropic ${res.status}: ${err}`);
-  }
-  const data = await res.json();
-  const raw = data.content?.find(c => c.type === 'text')?.text?.trim() || '';
-  return parseAIResponse(raw);
-}
-
-/** Google 응답용 JSON 스키마 (SDK structured output) */
-const GOOGLE_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    steps: {
-      type: 'array',
-      description: '이 페이지에서 할 일 단계별 목록',
-      items: {
-        type: 'object',
-        properties: {
-          text: { type: 'string', description: '해당 단계 안내 문장' },
-          selector: { type: 'string', description: '해당 요소의 CSS 선택자, 없으면 null' },
-        },
-        required: ['text'],
-      },
-    },
-  },
-  required: ['steps'],
-};
-
-/**
- * Google Gemini - @google/genai SDK 사용 (responseMimeType: application/json)
- */
-async function callGoogle(modelId, apiKey, messages, imageDataUrl) {
-  const ai = new GoogleGenAI({ apiKey });
-  const promptText = messages.system + '\n\n' + messages.user;
-
-  const contents = imageDataUrl
-    ? (() => {
-        const base64 = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
-        return [
-          {
-            role: 'user',
-            parts: [
-              { text: promptText },
-              { inlineData: { mimeType: 'image/png', data: base64 } },
-            ],
-          },
-        ];
-      })()
-    : promptText;
-
-  const response = await ai.models.generateContent({
-    model: modelId,
-    contents,
-    config: {
-      maxOutputTokens: 2048,
-      temperature: 0,
-      responseMimeType: 'application/json',
-      responseSchema: GOOGLE_RESPONSE_SCHEMA,
-    },
-  });
-
-  const raw = (response.text || '').trim();
-  if (!raw) throw new Error('Google API가 빈 응답을 반환했습니다.');
-  return parseAIResponse(raw);
+  return { steps: data.steps || [] };
 }
 
 /** 파싱 실패 시 반환하는 고정 메시지 (재시도 판별용) */
@@ -358,12 +253,11 @@ function parseAIResponse(raw) {
 }
 
 /**
- * 선택된 모델에 대한 API 키가 있는지 확인 (가이드 진입 시 사용)
+ * 백엔드 URL이 설정되어 있는지 확인 (가이드 진입 시 사용)
  */
 export function hasValidApiKey() {
-  return getStoredAISettings().then(({ modelId, apiKeys }) => {
-    const provider = MODEL_PROVIDER[modelId] || 'openai';
-    return !!(apiKeys[provider] && String(apiKeys[provider]).trim());
+  return getStoredAISettings().then(({ backendUrl }) => {
+    return !!(backendUrl && String(backendUrl).trim() && backendUrl !== 'https://your-app.railway.app');
   });
 }
 
@@ -375,11 +269,10 @@ export function hasValidApiKey() {
  * @returns {Promise<{ steps: Array<{ text: string, selector: string|null }> }>}
  */
 export async function getPageGuidance(context, pageContext, pageUrl) {
-  const { modelId, apiKeys } = await getStoredAISettings();
-  const provider = MODEL_PROVIDER[modelId] || 'openai';
-  const key = apiKeys[provider];
-  if (!key) {
-    throw new Error(`설정에서 ${provider} API 키를 입력해주세요.`);
+  const { modelId, backendUrl } = await getStoredAISettings();
+  
+  if (!backendUrl || !backendUrl.trim()) {
+    throw new Error('설정에서 백엔드 서버 URL을 입력해주세요.');
   }
 
   // 도메인별 가이드 문서 로드 (프롬프트 캐싱을 위해)
@@ -389,23 +282,22 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
   const messages = buildPrompt(context, pageContext, pageUrl, domainGuide);
   const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
 
-  const callProvider = () => {
-    if (provider === 'openai') return callOpenAI(modelId, key, messages, imageDataUrl);
-    if (provider === 'anthropic') return callAnthropic(modelId, key, messages, imageDataUrl);
-    if (provider === 'google') return callGoogle(modelId, key, messages, imageDataUrl);
-    throw new Error(`지원하지 않는 모델: ${modelId}`);
-  };
-
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const result = await callProvider();
+      const result = await callBackend(
+        backendUrl,
+        modelId,
+        messages,
+        pageContext.type,
+        imageDataUrl
+      );
       if (!isParseFailureResult(result)) return result;
       if (attempt < maxAttempts) {
         console.warn(`[vibe-guide] AI 응답 파싱 실패, 재시도 ${attempt}/${maxAttempts}`);
       }
     } catch (err) {
-      console.error(`[vibe-guide] AI 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
+      console.error(`[vibe-guide] 백엔드 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
       if (attempt >= maxAttempts) throw err;
     }
   }
