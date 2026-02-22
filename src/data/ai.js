@@ -148,7 +148,7 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
 }
 
 // 백엔드 서버 URL (하드코딩)
-const BACKEND_URL = 'https://your-app.railway.app'; // Railway 배포 후 여기에 실제 URL 입력
+const BACKEND_URL = 'https://vibe-guide-production.up.railway.app';
 
 /**
  * 저장된 AI 설정 조회 (background에서 호출)
@@ -257,7 +257,7 @@ function parseAIResponse(raw) {
  */
 export function hasValidApiKey() {
   return getStoredAISettings().then(({ backendUrl }) => {
-    return !!(backendUrl && String(backendUrl).trim() && backendUrl !== 'https://your-app.railway.app');
+    return !!(backendUrl && String(backendUrl).trim());
   });
 }
 

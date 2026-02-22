@@ -4,12 +4,30 @@ FastAPI 기반 백엔드 서버로, OpenAI API를 프록시하여 AI 가이드�
 
 ## 배포 방법 (Railway)
 
-1. Railway에 프로젝트 생성
-2. GitHub 저장소 연결 또는 직접 배포
-3. 환경변수 설정:
+### 방법 1: Railway CLI 사용 (권장)
+
+```bash
+# backend 폴더로 이동
+cd backend
+
+# Railway 로그인
+railway login
+
+# 프로젝트 초기화 (새 프로젝트인 경우)
+railway init
+
+# 배포
+railway up
+```
+
+### 방법 2: Railway 웹 대시보드 사용
+
+1. Railway 대시보드에서 새 프로젝트 생성
+2. GitHub 저장소 연결
+3. **Settings → Root Directory를 `backend`로 설정**
+4. 환경변수 설정:
    - `OPENAI_API_KEY`: OpenAI API 키 (필수)
-   - `PORT`: Railway가 자동으로 설정 (기본값 사용)
-4. 배포 완료 후 생성된 URL을 확장 프로그램 설정에 입력
+5. 배포 완료 후 생성된 URL을 `src/data/ai.js`의 `BACKEND_URL`에 하드코딩
 
 ## 로컬 실행
 

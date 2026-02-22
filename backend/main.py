@@ -9,6 +9,11 @@ from typing import Optional, List, Literal
 import os
 import httpx
 import json
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Vibe Guide API")
 
@@ -57,7 +62,18 @@ async def get_guidance(request: GuidanceRequest):
     AI 가이드 생성 API
     프론트엔드에서 프롬프트를 받아 OpenAI API를 호출하고 결과를 반환
     """
+    import traceback
     try:
+        logger.info(f"요청 받음: model={request.model}, type={request.page_context_type}")
+        
+        # OpenAI API 키 확인
+        try:
+            api_key = get_openai_api_key()
+            logger.info("OpenAI API 키 확인 완료")
+        except ValueError as e:
+            logger.error(f"환경변수 오류: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"환경변수 오류: {str(e)}")
+        
         # OpenAI API 호출 준비
         content = [{"type": "text", "text": request.user}]
         
@@ -70,9 +86,10 @@ async def get_guidance(request: GuidanceRequest):
                 "type": "image_url",
                 "image_url": {"url": image_url}
             })
+            logger.info("이미지 포함됨")
 
         # OpenAI API 호출
-        api_key = get_openai_api_key()
+        logger.info("OpenAI API 호출 시작")
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -90,29 +107,47 @@ async def get_guidance(request: GuidanceRequest):
                 },
             )
             
+            logger.info(f"OpenAI API 응답 상태: {response.status_code}")
+            
             if not response.is_success:
-                error_text = response.text
+                try:
+                    error_data = response.json()
+                    error_text = error_data.get("error", {}).get("message", response.text)
+                except:
+                    error_text = response.text
+                logger.error(f"OpenAI API 오류: {error_text}")
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"OpenAI API 오류: {error_text}"
+                    detail=f"OpenAI API 오류 ({response.status_code}): {error_text}"
                 )
             
             data = response.json()
             raw = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
             
             if not raw:
+                logger.error("OpenAI API가 빈 응답을 반환했습니다.")
                 raise HTTPException(status_code=500, detail="OpenAI API가 빈 응답을 반환했습니다.")
+            
+            logger.info(f"OpenAI 응답 받음 (길이: {len(raw)})")
             
             # JSON 파싱
             parsed = parse_ai_response(raw)
+            logger.info(f"파싱 완료: {len(parsed.get('steps', []))}개 단계")
             return GuidanceResponse(steps=parsed.get("steps", []))
             
+    except HTTPException:
+        raise
     except httpx.TimeoutException:
+        logger.error("OpenAI API 호출 시간 초과")
         raise HTTPException(status_code=504, detail="OpenAI API 호출 시간 초과")
     except httpx.RequestError as e:
+        logger.error(f"OpenAI API 요청 실패: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OpenAI API 요청 실패: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
+        error_msg = str(e) if str(e) else type(e).__name__
+        error_trace = traceback.format_exc()
+        logger.error(f"서버 오류: {error_msg}\n{error_trace}")
+        raise HTTPException(status_code=500, detail=f"서버 오류: {error_msg}")
 
 
 def parse_ai_response(raw: str) -> dict:
