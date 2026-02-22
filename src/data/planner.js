@@ -105,8 +105,8 @@ function buildDemoPlan(answers) {
   if (!googleTool || !vercelTool) throw new Error('Demo requires google-ai-studio and vercel in TOOLS');
 
   const toolsWithOrder = [
-    { ...googleTool, ...TOOL_ROLES['google-ai-studio'], order: 1, score: 0 },
-    { ...vercelTool, ...TOOL_ROLES.vercel, order: 2, score: 0 },
+    { ...googleTool, ...TOOL_ROLES['google-ai-studio'], order: 1, score: 100 },
+    { ...vercelTool, ...TOOL_ROLES.vercel, order: 2, score: 100 },
   ];
 
   const steps = [
@@ -166,7 +166,7 @@ export function buildPlan(answers) {
   // 보조 툴: Vercel 하나만
   const vercelTool = TOOLS.find(t => t.id === 'vercel');
   const subTools = vercelTool
-    ? [{ ...vercelTool, ...(TOOL_ROLES.vercel || { role: '배포 & 호스팅', icon: '▲' }), order: 2, score: 0 }]
+    ? [{ ...vercelTool, ...(TOOL_ROLES.vercel || { role: '배포 & 호스팅', icon: '▲' }), order: 2, score: 100 }]
     : [];
   const toolsWithOrder = [mainTool, ...subTools];
 
