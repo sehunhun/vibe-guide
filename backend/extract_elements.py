@@ -7,57 +7,133 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 
 
-def generate_selector(element) -> Optional[str]:
-    """요소의 안정적인 CSS 선택자 생성"""
+def generate_selector(element, all_elements=None) -> Optional[str]:
+    """
+    요소의 안정적인 CSS 선택자 생성
+    all_elements: 같은 페이지의 모든 추출된 요소들 (중복 체크용)
+    """
     # 1. id가 있으면 가장 안정적
     if element.get('id'):
-        return f"#{element['id']}"
+        selector = f"#{element['id']}"
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
     
     # 2. data 속성 (data-testid, data-id 등)
     for attr, value in element.attrs.items():
         if attr.startswith('data-'):
             escaped_value = value.replace('"', '\\"') if isinstance(value, str) else str(value)
-            return f'[{attr}="{escaped_value}"]'
+            selector = f'[{attr}="{escaped_value}"]'
+            if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+                return selector
+            elif not all_elements:
+                return selector
     
     # 3. aria-label
     if element.get('aria-label'):
         escaped = element['aria-label'].replace('"', '\\"')
-        return f'[aria-label="{escaped}"]'
+        selector = f'[aria-label="{escaped}"]'
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
+        elif not all_elements:
+            return selector
     
     # 4. name 속성 (input, select 등)
     if element.get('name'):
         escaped = element['name'].replace('"', '\\"')
-        return f'{element.name}[name="{escaped}"]'
+        selector = f'{element.name}[name="{escaped}"]'
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
+        elif not all_elements:
+            return selector
     
     # 5. type 속성 (input)
     if element.name == 'input' and element.get('type'):
-        return f'input[type="{element["type"]}"]'
+        selector = f'input[type="{element["type"]}"]'
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
+        elif not all_elements:
+            return selector
     
     # 6. placeholder (input, textarea)
     if element.get('placeholder'):
         escaped = element['placeholder'].replace('"', '\\"')
-        return f'{element.name}[placeholder="{escaped}"]'
+        selector = f'{element.name}[placeholder="{escaped}"]'
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
+        elif not all_elements:
+            return selector
     
     # 7. title 속성
     if element.get('title'):
         escaped = element['title'].replace('"', '\\"')
-        return f'[title="{escaped}"]'
+        selector = f'[title="{escaped}"]'
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
+        elif not all_elements:
+            return selector
     
     # 8. role 속성
     if element.get('role'):
-        return f'[role="{element["role"]}"]'
+        selector = f'[role="{element["role"]}"]'
+        if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+            return selector
+        elif not all_elements:
+            return selector
     
-    # 9. class (고유한 단일 클래스만)
+    # 9. class 조합 (여러 클래스가 있어도 조합해서 사용)
     class_attr = element.get('class', [])
-    if isinstance(class_attr, list) and len(class_attr) == 1:
-        return f'.{class_attr[0]}'
-    elif isinstance(class_attr, str) and class_attr.strip():
-        classes = class_attr.strip().split()
-        if len(classes) == 1:
-            return f'.{classes[0]}'
+    if class_attr:
+        if isinstance(class_attr, list):
+            classes = [c for c in class_attr if c and c.strip()]
+        else:
+            classes = class_attr.strip().split() if class_attr.strip() else []
+        
+        if classes:
+            # 클래스 조합으로 selector 생성
+            class_selector = '.'.join([c.replace(' ', '\\ ') for c in classes])
+            selector = f'.{class_selector}'
+            if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+                return selector
+            elif not all_elements:
+                return selector
+            
+            # 단일 클래스도 시도
+            if len(classes) == 1:
+                selector = f'.{classes[0]}'
+                if all_elements and not _is_duplicate_selector(selector, element, all_elements):
+                    return selector
+                elif not all_elements:
+                    return selector
     
-    # 10. 최후의 수단: tag만
+    # 10. 텍스트 기반 selector (텍스트가 있고 고유한 경우)
+    text = get_element_text(element)
+    if text and text.strip():
+        # 텍스트가 짧고 고유한 경우에만 사용
+        if len(text.strip()) < 50:  # 너무 긴 텍스트는 피함
+            # text content로 찾기 (하지만 이건 느릴 수 있으므로 최후의 수단)
+            pass
+    
+    # 11. 최후의 수단: tag만 (중복 가능성 높음)
     return element.name
+
+
+def _is_duplicate_selector(selector: str, current_element, all_elements) -> bool:
+    """같은 selector를 가진 다른 요소가 있는지 확인"""
+    if not all_elements:
+        return False
+    
+    # BeautifulSoup의 select()를 사용하여 같은 selector로 찾을 수 있는 요소 개수 확인
+    # current_element의 부모에서 같은 selector로 찾기
+    try:
+        parent = current_element.parent
+        if parent:
+            found = parent.select(selector)
+            # current_element를 제외하고 다른 요소가 있으면 중복
+            return len([el for el in found if el != current_element]) > 0
+    except:
+        pass
+    
+    return False
 
 
 def get_element_text(element) -> str:
@@ -171,18 +247,23 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
         elements = []
         seen_ids = set()  # 중복 제거용
         
+        # 먼저 모든 요소를 수집한 후 selector 생성 (중복 체크를 위해)
+        temp_elements = []
         for el in found:
             # 중복 제거
             el_id = id(el)
             if el_id in seen_ids:
                 continue
             seen_ids.add(el_id)
-            
+            temp_elements.append(el)
+        
+        # selector 생성 (중복 체크를 위해 두 단계로 나눔)
+        for el in temp_elements:
             # 2. 필요한 속성만 추출
             tag = el.name
             
-            # selector 생성
-            selector_str = generate_selector(el)
+            # selector 생성 (모든 요소 정보 전달하여 중복 체크)
+            selector_str = generate_selector(el, temp_elements)
             if not selector_str:
                 continue
             

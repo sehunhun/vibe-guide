@@ -130,6 +130,7 @@ export function buildPlanContext(context, domainGuide = null) {
 export function buildPageState(pageUrl, pageContext, previousStepsForUrl = null) {
   const parts = [
     '[PAGE INTERACTION ELEMENTS]',
+    '**IMPORTANT**: You MUST use ONLY the selectors provided in this list. Do not create or invent new selectors. If you cannot find the exact element in this list, return null for the selector.',
     '',
   ];
 
