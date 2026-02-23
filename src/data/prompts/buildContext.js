@@ -129,18 +129,19 @@ export function buildPlanContext(context, domainGuide = null) {
  */
 export function buildPageState(pageUrl, pageContext, previousStepsForUrl = null) {
   const parts = [
-    '[PAGE HTML]',
-    '**IMPORTANT**: Analyze the HTML below and find the matching element for the step. Generate a CSS selector based on the element\'s attributes (id, data-*, class, etc.).',
+    '[PAGE INTERACTION ELEMENTS]',
+    '**IMPORTANT**: You MUST use ONLY the selectors provided in this list. Do not create or invent new selectors. If you cannot find the exact element in this list, return null for the selector.',
     '',
   ];
 
   if (pageContext.type === 'html' && pageContext.content) {
-    // HTML 원문을 그대로 프롬프트에 포함
-    parts.push(pageContext.content);
+    // 백엔드에서 요소 추출하므로 여기서는 빈 배열만 표시
+    // 백엔드가 자동으로 JSON으로 변환해서 채워줌
+    parts.push('[]');
   } else if (pageContext.type === 'image' && pageContext.content) {
     parts.push('(Current page screenshot provided as image. Analyze the UI and guide the user.)');
   } else {
-    parts.push('(No page content available)');
+    parts.push('[]');
   }
 
   parts.push('');
