@@ -267,7 +267,7 @@ def parse_ai_response(raw: str, interactive_elements: List[Dict] = None) -> dict
     AI 응답 텍스트에서 JSON 추출 → steps 배열로 정규화
     elementIndex를 받아서 selector를 룰베이스로 생성
     """
-    from backend.extract_elements import generate_selector_from_attributes
+    from extract_elements import generate_selector_from_attributes
     import re
     
     cleaned = re.sub(r"^```(?:json)?\s*\n?", "", raw, flags=re.IGNORECASE)
