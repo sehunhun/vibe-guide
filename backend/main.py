@@ -121,21 +121,21 @@ async def get_guidance(request: GuidanceRequest):
                         # 페이지 상태 메시지에 요소 JSON 추가
                         elements_json = json.dumps(interactive_elements, ensure_ascii=False, indent=2)
                         logger.info(f"요소 JSON 길이: {len(elements_json)}")
-                        # [PAGE INTERACTION ELEMENTS] 섹션의 []를 교체
-                        if "[PAGE INTERACTION ELEMENTS]" in content:
-                            logger.info("[PAGE INTERACTION ELEMENTS] 섹션 발견, 교체 중")
-                            # []를 찾아서 교체 (정규식 사용)
-                            import re
-                            # [PAGE INTERACTION ELEMENTS] 다음에 나오는 []를 교체
-                            pattern = r'(\[PAGE INTERACTION ELEMENTS\]\s*\n\s*)\[\]'
-                            replacement = f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}'
-                            content = re.sub(pattern, replacement, content)
-                            # 혹시 []가 별도 줄에 있으면 교체
-                            content = content.replace('[PAGE INTERACTION ELEMENTS]\n\n[]', f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}')
+                        # [PAGE INTERACTION ELEMENTS] 섹션의 placeholder를 교체
+                        if "{{INTERACTION_ELEMENTS_PLACEHOLDER}}" in content:
+                            logger.info("INTERACTION_ELEMENTS_PLACEHOLDER 발견, 교체 중")
+                            # placeholder를 JSON으로 간단히 교체
+                            content = content.replace('{{INTERACTION_ELEMENTS_PLACEHOLDER}}', elements_json)
                             messages[-1]["content"] = content
                             logger.info("요소 JSON 교체 완료")
-                            # 교체된 메시지의 일부 확인 (처음 500자)
-                            logger.info(f"교체된 메시지 일부 (처음 500자): {content[:500]}")
+                            # 교체된 메시지의 일부 확인 (처음 1000자)
+                            logger.info(f"교체된 메시지 일부 (처음 1000자): {content[:1000]}")
+                        elif "[PAGE INTERACTION ELEMENTS]" in content:
+                            logger.info("[PAGE INTERACTION ELEMENTS] 섹션 발견 (placeholder 없음), 추가 중")
+                            # placeholder가 없으면 섹션 뒤에 추가
+                            content = content.replace('[PAGE INTERACTION ELEMENTS]', f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}')
+                            messages[-1]["content"] = content
+                            logger.info("요소 JSON 추가 완료")
                         else:
                             logger.info("[PAGE INTERACTION ELEMENTS] 섹션 없음, 추가 중")
                             # 섹션이 없으면 추가

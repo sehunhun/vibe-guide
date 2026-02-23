@@ -135,13 +135,13 @@ export function buildPageState(pageUrl, pageContext, previousStepsForUrl = null)
   ];
 
   if (pageContext.type === 'html' && pageContext.content) {
-    // 백엔드에서 요소 추출하므로 여기서는 빈 배열만 표시
+    // 백엔드에서 요소 추출하므로 placeholder 사용
     // 백엔드가 자동으로 JSON으로 변환해서 채워줌
-    parts.push('[]');
+    parts.push('{{INTERACTION_ELEMENTS_PLACEHOLDER}}');
   } else if (pageContext.type === 'image' && pageContext.content) {
     parts.push('(Current page screenshot provided as image. Analyze the UI and guide the user.)');
   } else {
-    parts.push('[]');
+    parts.push('{{INTERACTION_ELEMENTS_PLACEHOLDER}}');
   }
 
   parts.push('');
