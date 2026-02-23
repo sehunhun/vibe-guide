@@ -10,6 +10,7 @@ import os
 import httpx
 import json
 import logging
+from extract_elements import extract_interactive_elements
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -40,8 +41,11 @@ class Step(BaseModel):
 
 
 class GuidanceRequest(BaseModel):
-    system: str
-    user: str
+    # 하위 호환: system/user 형식도 지원
+    system: Optional[str] = None
+    user: Optional[str] = None
+    # 새로운 형식: messages 배열
+    messages: Optional[List[dict]] = None
     model: str = "gpt-4o-mini"
     page_context_type: Literal["html", "image"]
     page_context_content: Optional[str] = None  # HTML 문자열 또는 base64 이미지
@@ -74,19 +78,92 @@ async def get_guidance(request: GuidanceRequest):
             logger.error(f"환경변수 오류: {str(e)}")
             raise HTTPException(status_code=500, detail=f"환경변수 오류: {str(e)}")
         
-        # OpenAI API 호출 준비
-        content = [{"type": "text", "text": request.user}]
+        # HTML이 있으면 상호작용 가능한 요소 추출
+        interactive_elements = []
+        if request.page_context_type == "html" and request.page_context_content:
+            try:
+                interactive_elements = extract_interactive_elements(request.page_context_content)
+                logger.info(f"추출된 상호작용 요소: {len(interactive_elements)}개")
+            except Exception as e:
+                logger.warning(f"요소 추출 실패: {e}")
         
-        # 이미지가 있으면 추가
-        if request.page_context_type == "image" and request.page_context_content:
-            image_url = request.page_context_content
-            if not image_url.startswith("data:"):
-                image_url = f"data:image/png;base64,{image_url}"
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": image_url}
-            })
-            logger.info("이미지 포함됨")
+        # 메시지 형식 결정 (새로운 messages 배열 또는 하위 호환 system/user)
+        if request.messages:
+            # 새로운 형식: messages 배열 사용
+            messages = request.messages.copy()
+            
+            # HTML에서 추출한 요소를 마지막 user 메시지(페이지 상태)에 추가
+            if interactive_elements and messages:
+                last_msg = messages[-1]
+                if last_msg.get("role") == "user":
+                    content = last_msg.get("content", "")
+                    if isinstance(content, str):
+                        # 페이지 상태 메시지에 요소 JSON 추가
+                        elements_json = json.dumps(interactive_elements, ensure_ascii=False, indent=2)
+                        # [PAGE INTERACTION ELEMENTS] 섹션의 []를 교체
+                        if "[PAGE INTERACTION ELEMENTS]" in content:
+                            # []를 찾아서 교체 (정규식 사용)
+                            import re
+                            # [PAGE INTERACTION ELEMENTS] 다음에 나오는 []를 교체
+                            pattern = r'(\[PAGE INTERACTION ELEMENTS\]\s*\n\s*)\[\]'
+                            replacement = f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}'
+                            content = re.sub(pattern, replacement, content)
+                            # 혹시 []가 별도 줄에 있으면 교체
+                            content = content.replace('[PAGE INTERACTION ELEMENTS]\n\n[]', f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}')
+                            messages[-1]["content"] = content
+                        else:
+                            # 섹션이 없으면 추가
+                            messages[-1]["content"] = content + f"\n\n[PAGE INTERACTION ELEMENTS]\n\n{elements_json}\n"
+            
+            # 이미지가 있으면 마지막 user 메시지에 추가
+            if request.page_context_type == "image" and request.page_context_content:
+                image_url = request.page_context_content
+                if not image_url.startswith("data:"):
+                    image_url = f"data:image/png;base64,{image_url}"
+                
+                # 마지막 메시지가 user인 경우 이미지 추가
+                if messages and messages[-1].get("role") == "user":
+                    last_msg = messages[-1]
+                    content = last_msg.get("content", "")
+                    
+                    # content가 문자열이면 배열로 변환
+                    if isinstance(content, str):
+                        messages[-1]["content"] = [
+                            {"type": "text", "text": content},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": image_url}
+                            }
+                        ]
+                    elif isinstance(content, list):
+                        # 이미 배열이면 이미지 추가
+                        content.append({
+                            "type": "image_url",
+                            "image_url": {"url": image_url}
+                        })
+                    logger.info("이미지 포함됨 (messages 배열 형식)")
+        else:
+            # 하위 호환: system/user 형식
+            if not request.system or not request.user:
+                raise HTTPException(status_code=400, detail="system/user 또는 messages 필드가 필요합니다.")
+            
+            content = [{"type": "text", "text": request.user}]
+            
+            # 이미지가 있으면 추가
+            if request.page_context_type == "image" and request.page_context_content:
+                image_url = request.page_context_content
+                if not image_url.startswith("data:"):
+                    image_url = f"data:image/png;base64,{image_url}"
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": image_url}
+                })
+                logger.info("이미지 포함됨 (하위 호환 형식)")
+            
+            messages = [
+                {"role": "system", "content": request.system},
+                {"role": "user", "content": content},
+            ]
 
         # OpenAI API 호출
         logger.info("OpenAI API 호출 시작")
@@ -99,10 +176,7 @@ async def get_guidance(request: GuidanceRequest):
                 },
                 json={
                     "model": request.model,
-                    "messages": [
-                        {"role": "system", "content": request.system},
-                        {"role": "user", "content": content},
-                    ],
+                    "messages": messages,
                     "max_tokens": 2048,
                 },
             )
