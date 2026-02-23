@@ -87,7 +87,7 @@ export function getStoredAISettings() {
 /**
  * 백엔드 API 호출
  */
-async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl) {
+async function callBackend(backendUrl, modelId, messages, pageContextType, pageContextContent) {
   if (!backendUrl || !backendUrl.trim()) {
     throw new Error('백엔드 서버 URL을 설정해주세요.');
   }
@@ -100,13 +100,13 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
   let messagesToSend = messages.messages || [];
   
   // 이미지가 있으면 마지막 user 메시지에 이미지 추가
-  if (imageDataUrl && messagesToSend.length > 0) {
+  if (pageContextType === 'image' && pageContextContent && messagesToSend.length > 0) {
     const lastMessage = messagesToSend[messagesToSend.length - 1];
     if (lastMessage.role === 'user') {
       // OpenAI 형식: content를 배열로 변환
-      const imageUrl = imageDataUrl.startsWith('data:') 
-        ? imageDataUrl 
-        : `data:image/png;base64,${imageDataUrl}`;
+      const imageUrl = pageContextContent.startsWith('data:') 
+        ? pageContextContent 
+        : `data:image/png;base64,${pageContextContent}`;
       
       messagesToSend = [
         ...messagesToSend.slice(0, -1),
@@ -133,7 +133,7 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
       messages: messagesToSend,
       model: modelId,
       page_context_type: pageContextType,
-      page_context_content: imageDataUrl || null,
+      page_context_content: pageContextContent || null,
     }),
   });
 
@@ -235,7 +235,10 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
     console.log('[vibe-guide] buildPrompt 호출 전');
     const promptResult = await buildPrompt(context, pageContext, pageUrl, domainGuide);
     console.log('[vibe-guide] buildPrompt 완료, messages 원문:', promptResult);
-    const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
+    
+    // HTML 또는 이미지 콘텐츠를 백엔드에 전달
+    const pageContextContent = pageContext.content || null;
+    console.log('[vibe-guide] pageContextContent 전달:', pageContext.type, pageContextContent ? `길이: ${pageContextContent.length}` : '없음');
 
     const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -246,7 +249,7 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
           modelId,
           promptResult,
           pageContext.type,
-          imageDataUrl
+          pageContextContent
         );
         if (!isParseFailureResult(result)) {
           console.log('[vibe-guide] 백엔드 API 호출 성공:', result);

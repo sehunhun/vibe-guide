@@ -82,10 +82,15 @@ async def get_guidance(request: GuidanceRequest):
         interactive_elements = []
         if request.page_context_type == "html" and request.page_context_content:
             try:
+                logger.info(f"요소 추출 시작, HTML 길이: {len(request.page_context_content)}")
                 interactive_elements = extract_interactive_elements(request.page_context_content)
                 logger.info(f"추출된 상호작용 요소: {len(interactive_elements)}개")
+                if interactive_elements:
+                    logger.info(f"첫 번째 요소 예시: {interactive_elements[0]}")
             except Exception as e:
-                logger.warning(f"요소 추출 실패: {e}")
+                logger.error(f"요소 추출 실패: {e}", exc_info=True)
+        else:
+            logger.info(f"요소 추출 스킵: type={request.page_context_type}, content 있음={bool(request.page_context_content)}")
         
         # 메시지 형식 결정 (새로운 messages 배열 또는 하위 호환 system/user)
         if request.messages:
@@ -94,14 +99,17 @@ async def get_guidance(request: GuidanceRequest):
             
             # HTML에서 추출한 요소를 마지막 user 메시지(페이지 상태)에 추가
             if interactive_elements and messages:
+                logger.info(f"요소를 메시지에 추가 시작: {len(interactive_elements)}개 요소")
                 last_msg = messages[-1]
                 if last_msg.get("role") == "user":
                     content = last_msg.get("content", "")
                     if isinstance(content, str):
                         # 페이지 상태 메시지에 요소 JSON 추가
                         elements_json = json.dumps(interactive_elements, ensure_ascii=False, indent=2)
+                        logger.info(f"요소 JSON 길이: {len(elements_json)}")
                         # [PAGE INTERACTION ELEMENTS] 섹션의 []를 교체
                         if "[PAGE INTERACTION ELEMENTS]" in content:
+                            logger.info("[PAGE INTERACTION ELEMENTS] 섹션 발견, 교체 중")
                             # []를 찾아서 교체 (정규식 사용)
                             import re
                             # [PAGE INTERACTION ELEMENTS] 다음에 나오는 []를 교체
@@ -111,9 +119,16 @@ async def get_guidance(request: GuidanceRequest):
                             # 혹시 []가 별도 줄에 있으면 교체
                             content = content.replace('[PAGE INTERACTION ELEMENTS]\n\n[]', f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}')
                             messages[-1]["content"] = content
+                            logger.info("요소 JSON 교체 완료")
                         else:
+                            logger.info("[PAGE INTERACTION ELEMENTS] 섹션 없음, 추가 중")
                             # 섹션이 없으면 추가
                             messages[-1]["content"] = content + f"\n\n[PAGE INTERACTION ELEMENTS]\n\n{elements_json}\n"
+                            logger.info("요소 JSON 추가 완료")
+                else:
+                    logger.warning(f"마지막 메시지가 user가 아님: {last_msg.get('role')}")
+            else:
+                logger.info(f"요소 추가 스킵: interactive_elements={len(interactive_elements) if interactive_elements else 0}개, messages={len(messages) if messages else 0}개")
             
             # 이미지가 있으면 마지막 user 메시지에 추가
             if request.page_context_type == "image" and request.page_context_content:
