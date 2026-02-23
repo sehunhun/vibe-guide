@@ -100,6 +100,13 @@ async def get_guidance(request: GuidanceRequest):
             # HTML에서 추출한 요소를 마지막 user 메시지(페이지 상태)에 추가
             if interactive_elements and messages:
                 logger.info(f"요소를 메시지에 추가 시작: {len(interactive_elements)}개 요소")
+                # 추출된 모든 요소 출력
+                logger.info("=" * 80)
+                logger.info("추출된 인터랙션 요소 목록:")
+                for i, el in enumerate(interactive_elements, 1):
+                    logger.info(f"{i}. tag={el.get('tag')}, type={el.get('type')}, selector={el.get('selector')}, text={el.get('text')}")
+                logger.info("=" * 80)
+                
                 last_msg = messages[-1]
                 if last_msg.get("role") == "user":
                     content = last_msg.get("content", "")
