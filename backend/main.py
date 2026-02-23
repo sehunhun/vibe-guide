@@ -100,6 +100,19 @@ async def get_guidance(request: GuidanceRequest):
             # HTML에서 추출한 요소를 마지막 user 메시지(페이지 상태)에 추가
             if interactive_elements and messages:
                 logger.info(f"요소를 메시지에 추가 시작: {len(interactive_elements)}개 요소")
+                # 추출된 모든 요소 출력 (처음 5개만)
+                logger.info("=" * 80)
+                logger.info("추출된 인터랙션 요소 목록 (처음 5개):")
+                for i, el in enumerate(interactive_elements[:5], 1):
+                    attrs_str = ""
+                    if el.get('attributes'):
+                        attrs = el.get('attributes', {})
+                        key_attrs = ['id', 'class', 'data-testid', 'data-id', 'aria-label', 'name', 'type', 'placeholder']
+                        filtered_attrs = {k: v for k, v in attrs.items() if k in key_attrs and v}
+                        if filtered_attrs:
+                            attrs_str = f", attributes={filtered_attrs}"
+                    logger.info(f"{i}. tag={el.get('tag')}, type={el.get('type')}, selector={el.get('selector')}, text={el.get('text')}{attrs_str}")
+                logger.info("=" * 80)
                 
                 last_msg = messages[-1]
                 if last_msg.get("role") == "user":
@@ -121,6 +134,8 @@ async def get_guidance(request: GuidanceRequest):
                             content = content.replace('[PAGE INTERACTION ELEMENTS]\n\n[]', f'[PAGE INTERACTION ELEMENTS]\n\n{elements_json}')
                             messages[-1]["content"] = content
                             logger.info("요소 JSON 교체 완료")
+                            # 교체된 메시지의 일부 확인 (처음 500자)
+                            logger.info(f"교체된 메시지 일부 (처음 500자): {content[:500]}")
                         else:
                             logger.info("[PAGE INTERACTION ELEMENTS] 섹션 없음, 추가 중")
                             # 섹션이 없으면 추가
@@ -219,10 +234,16 @@ async def get_guidance(request: GuidanceRequest):
                 raise HTTPException(status_code=500, detail="OpenAI API가 빈 응답을 반환했습니다.")
             
             logger.info(f"OpenAI 응답 받음 (길이: {len(raw)})")
+            logger.info(f"OpenAI 응답 원문: {raw}")
             
             # JSON 파싱
             parsed = parse_ai_response(raw)
             logger.info(f"파싱 완료: {len(parsed.get('steps', []))}개 단계")
+            
+            # 각 단계의 selector 확인
+            for i, step in enumerate(parsed.get('steps', []), 1):
+                logger.info(f"단계 {i}: text={step.get('text')}, selector={step.get('selector')}")
+            
             return GuidanceResponse(steps=parsed.get("steps", []))
             
     except HTTPException:
