@@ -262,10 +262,8 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
             # 2. 필요한 속성만 추출
             tag = el.name
             
-            # selector 생성 (모든 요소 정보 전달하여 중복 체크)
-            selector_str = generate_selector(el, temp_elements)
-            if not selector_str:
-                continue
+            # selector는 태그만 사용
+            selector_str = tag
             
             # 텍스트 추출
             text = (
@@ -295,13 +293,28 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
             else:
                 element_type = 'button'
             
-            # 3. JSON으로 만들기
-            elements.append({
+            # 3. 모든 속성 추출
+            attrs = {}
+            for attr, value in el.attrs.items():
+                # 리스트나 복잡한 객체는 문자열로 변환
+                if isinstance(value, list):
+                    attrs[attr] = ' '.join(str(v) for v in value) if value else ''
+                else:
+                    attrs[attr] = str(value) if value else ''
+            
+            # 4. JSON으로 만들기 (모든 속성 포함)
+            element_data = {
                 'tag': tag,
                 'text': text.strip() or None,
                 'selector': selector_str,
                 'type': element_type,
-            })
+            }
+            
+            # 모든 속성 추가
+            if attrs:
+                element_data['attributes'] = attrs
+            
+            elements.append(element_data)
         
         return elements
     
