@@ -130,7 +130,7 @@ export function buildPlanContext(context, domainGuide = null) {
 export function buildPageState(pageUrl, pageContext, previousStepsForUrl = null) {
   const parts = [
     '[PAGE INTERACTION ELEMENTS]',
-    '**IMPORTANT**: You MUST use ONLY the selectors provided in this list. Do not create or invent new selectors. If you cannot find the exact element in this list, return null for the selector.',
+    '**IMPORTANT**: You MUST use ONLY the elements provided in this list. Find the most appropriate single element that matches the step text, then generate a CSS selector using EVERY SINGLE ATTRIBUTE from that element\'s attributes object in the format: tag[attr1="value1"][attr2="value2"][attr3="value3"][attr4="value4"]... Do NOT skip any attributes. Include ALL attributes (id, class, data-*, aria-*, name, type, href, target, rel, placeholder, value, role, title, etc.) to create the most specific selector. The selector must be valid for document.querySelector().',
     '',
   ];
 

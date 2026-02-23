@@ -101,7 +101,7 @@ export async function buildPromptForSelector(context, pageContext, pageUrl, step
 }
 
 /**
- * AI용 메시지 배열 생성 (하위 호환용 - 기존 방식)
+ * AI용 메시지 배열 생성
  * @param {{ plan: object, answers: object, previousStepsForUrl?: { steps: Array<{text,selector?}>, completed: boolean[] } }} context
  * @param {{ type: 'html'|'image', content: string }} pageContext - html 문자열 또는 base64 이미지
  * @param {string} pageUrl
@@ -109,8 +109,38 @@ export async function buildPromptForSelector(context, pageContext, pageUrl, step
  * @returns {Promise<{messages: Array<{role: string, content: string}>}>}
  */
 export async function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
-  // 하위 호환을 위해 기존 방식 유지
-  return buildPromptForSelector(context, pageContext, pageUrl, '', domainGuide);
+  try {
+    console.log('[vibe-guide] buildPrompt 시작');
+    
+    // 1. 시스템 프롬프트 로드
+    const systemPrompt = SYSTEM_PROMPT;
+    console.log('[vibe-guide] ===== SYSTEM PROMPT =====');
+    console.log(systemPrompt);
+    console.log('[vibe-guide] ========================');
+    
+    // 2. 전략/플랜 컨텍스트 생성
+    const planContext = buildPlanContext(context, domainGuide);
+    console.log('[vibe-guide] ===== PLAN CONTEXT =====');
+    console.log(planContext);
+    console.log('[vibe-guide] ========================');
+    
+    // 3. 페이지 상태 생성 (요소 목록 포함)
+    const pageState = buildPageState(pageUrl, pageContext, context.previousStepsForUrl);
+    console.log('[vibe-guide] ===== PAGE STATE =====');
+    console.log(pageState);
+    console.log('[vibe-guide] ========================');
+    
+    return {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: planContext },
+        { role: 'user', content: pageState },
+      ],
+    };
+  } catch (error) {
+    console.error('[vibe-guide] buildPrompt 오류:', error);
+    throw error;
+  }
 }
 
 // 백엔드 서버 URL (하드코딩)
@@ -263,7 +293,7 @@ export function hasValidApiKey() {
  */
 export async function getPageGuidance(context, pageContext, pageUrl) {
   try {
-    console.log('[vibe-guide] getPageGuidance 시작 (2단계 방식):', { pageUrl, type: pageContext.type });
+    console.log('[vibe-guide] getPageGuidance 시작:', { pageUrl, type: pageContext.type });
     
     const { modelId, backendUrl } = await getStoredAISettings();
     
@@ -277,86 +307,46 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
     const domainGuide = domainId ? await getDomainGuide(domainId) : null;
     console.log('[vibe-guide] 도메인 가이드 로드 완료:', domainGuide ? '있음' : '없음');
 
-    // ===== 1단계: 텍스트 생성 (PAGE STATE 없이) =====
-    console.log('[vibe-guide] ===== 1단계: 텍스트 생성 시작 =====');
-    const textPrompt = await buildPromptForText(context, pageUrl, domainGuide);
-    
-    const maxAttempts = 3;
-    let stepText = null;
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`[vibe-guide] 텍스트 생성 API 호출 시도 ${attempt}/${maxAttempts}`);
-        const textResult = await callBackend(
-          backendUrl,
-          modelId,
-          textPrompt,
-          'html', // PAGE STATE 없으므로 타입은 중요하지 않음
-          null // 콘텐츠 없음
-        );
-        if (!isParseFailureResult(textResult) && textResult?.steps?.[0]?.text) {
-          stepText = textResult.steps[0].text;
-          console.log('[vibe-guide] 텍스트 생성 성공:', stepText);
-          break;
-        }
-        if (attempt < maxAttempts) {
-          console.warn(`[vibe-guide] 텍스트 생성 실패, 재시도 ${attempt}/${maxAttempts}`);
-        }
-      } catch (err) {
-        console.error(`[vibe-guide] 텍스트 생성 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
-        if (attempt >= maxAttempts) throw err;
-      }
-    }
-    
-    if (!stepText) {
-      console.warn('[vibe-guide] 텍스트 생성 실패, fallback 반환');
-      return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
-    }
-
-    // ===== 2단계: Selector 생성 (PAGE STATE 포함) =====
-    console.log('[vibe-guide] ===== 2단계: Selector 생성 시작 =====');
-    const selectorPrompt = await buildPromptForSelector(context, pageContext, pageUrl, stepText, domainGuide);
+    // 프롬프트 생성 (1단계로 통합)
+    const prompt = await buildPrompt(context, pageContext, pageUrl, domainGuide);
     
     // HTML 또는 이미지 콘텐츠를 백엔드에 전달
     const pageContextContent = pageContext.content || null;
     console.log('[vibe-guide] pageContextContent 전달:', pageContext.type, pageContextContent ? `길이: ${pageContextContent.length}` : '없음');
 
+    const maxAttempts = 3;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        console.log(`[vibe-guide] Selector 생성 API 호출 시도 ${attempt}/${maxAttempts}`);
-        const selectorResult = await callBackend(
+        console.log(`[vibe-guide] API 호출 시도 ${attempt}/${maxAttempts}`);
+        const result = await callBackend(
           backendUrl,
           modelId,
-          selectorPrompt,
+          prompt,
           pageContext.type,
           pageContextContent
         );
-        if (!isParseFailureResult(selectorResult) && selectorResult?.steps?.[0]) {
-          // 텍스트는 첫 번째 단계에서 생성한 것을 사용, selector는 두 번째 단계에서 생성한 것을 사용
-          const finalResult = {
-            steps: [{
-              text: stepText,
-              selector: selectorResult.steps[0].selector || null,
-            }],
-          };
-          console.log('[vibe-guide] 최종 결과:', finalResult);
-          return finalResult;
+        
+        if (!isParseFailureResult(result) && result?.steps?.[0]) {
+          console.log('[vibe-guide] 최종 결과:', result);
+          return result;
         }
+        
+        if (Array.isArray(result?.steps) && result.steps.length === 0) {
+          console.log('[vibe-guide] 빈 배열 반환 (더 이상 단계 없음)');
+          return { steps: [] };
+        }
+        
         if (attempt < maxAttempts) {
-          console.warn(`[vibe-guide] Selector 생성 실패, 재시도 ${attempt}/${maxAttempts}`);
+          console.warn(`[vibe-guide] API 호출 실패, 재시도 ${attempt}/${maxAttempts}`);
         }
       } catch (err) {
-        console.error(`[vibe-guide] Selector 생성 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
-        if (attempt >= maxAttempts) {
-          // Selector 생성 실패해도 텍스트는 있으므로 반환
-          console.warn('[vibe-guide] Selector 생성 실패, 텍스트만 반환');
-          return { steps: [{ text: stepText, selector: null }] };
-        }
+        console.error(`[vibe-guide] API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
+        if (attempt >= maxAttempts) throw err;
       }
     }
 
-    console.warn('[vibe-guide] Selector 생성 실패, 텍스트만 반환');
-    return { steps: [{ text: stepText, selector: null }] };
+    console.warn('[vibe-guide] API 호출 실패, fallback 반환');
+    return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
   } catch (error) {
     console.error('[vibe-guide] getPageGuidance 전체 오류:', error);
     console.error('[vibe-guide] 오류 스택:', error.stack);

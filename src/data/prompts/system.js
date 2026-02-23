@@ -23,10 +23,11 @@ You must output ONLY the following JSON. Do not include any other explanation.
 5. **Combine consecutive actions**: Do not separate consecutive actions like "enter" and "submit" into separate steps. Combine them into one step. Example: "Enter and submit" or "Enter then submit".
 6. **Only actionable steps**: Only add steps that users can actually perform (click, type, input, select, drag, etc.). Do not include passive actions like "read", "check", "view", "refer to". Examples: "Click the button", "Enter text", "Select an option", etc.
 7. **Selector**: You MUST generate a CSS selector for the element. The selector must be valid for document.querySelector(). 
-   - Find the matching element from the [PAGE INTERACTION ELEMENTS] list based on the step text.
-   - Use the element's attributes to create a selector. Priority: id (#id) > data attributes ([data-attr="value"]) > classes (.class1.class2) > tag name (button, a).
-   - Example: If element has id="build-btn", use #build-btn
-   - Example: If element has data-testid="build-button", use [data-testid="build-button"]
-   - Example: If element has class="btn btn-primary", use .btn.btn-primary
-   - Example: If element has only tag="button" and text="Build", use button (but try to find more specific attributes first)
-   - **CRITICAL**: You MUST find a matching element and generate a selector. Only return null if the step text explicitly indicates a non-interactive action (e.g., "read this page", "wait for loading"). For all clickable, input, or interactive elements, you MUST generate a selector.`;
+   - Find the **most appropriate single element** from the [PAGE INTERACTION ELEMENTS] list that matches the step text.
+   - **CRITICAL**: Generate a selector using **EVERY SINGLE ATTRIBUTE** from that element's attributes object. Do NOT skip any attributes. Include ALL of them in the format: tag[attr1="value1"][attr2="value2"][attr3="value3"][attr4="value4"]...
+   - You MUST include ALL attributes: id, class, data-*, aria-*, name, type, href, target, rel, placeholder, value, role, title, etc. - EVERY attribute that exists in the attributes object.
+   - Example: If element has tag="button", id="build-btn", class="btn btn-primary", data-testid="build-button", aria-label="Build", type="button", use: button[id="build-btn"][class="btn btn-primary"][data-testid="build-button"][aria-label="Build"][type="button"]
+   - Example: If element has tag="a", href="/path", class="link", aria-label="Build", target="_blank", rel="noopener", use: a[href="/path"][class="link"][aria-label="Build"][target="_blank"][rel="noopener"]
+   - Example: If element has tag="input", type="text", name="idea", placeholder="describe", class="input-field", id="idea-input", use: input[type="text"][name="idea"][placeholder="describe"][class="input-field"][id="idea-input"]
+   - **DO NOT** create selectors like button[class="..."] with only one attribute. You MUST include ALL attributes from the attributes object.
+   - **CRITICAL**: You MUST find the most appropriate matching element and generate a selector using EVERY SINGLE attribute from its attributes object. Only return null if the step text explicitly indicates a non-interactive action (e.g., "read this page", "wait for loading"). For all clickable, input, or interactive elements, you MUST generate a selector.`;
