@@ -215,12 +215,39 @@ def is_clickable(element) -> bool:
     return False
 
 
+def generate_selector_from_attributes(tag: str, attributes: Dict) -> str:
+    """
+    요소의 모든 속성을 사용하여 CSS selector 생성 (룰베이스)
+    모든 속성을 포함한 형태: tag[attr1="value1"][attr2="value2"]...
+    """
+    if not attributes:
+        return tag
+    
+    selector_parts = [tag]
+    
+    # 모든 속성을 순서대로 추가
+    for attr, value in sorted(attributes.items()):
+        if value is None or value == '':
+            continue
+        
+        # 값 이스케이프
+        if isinstance(value, str):
+            # 따옴표 이스케이프
+            escaped_value = value.replace('"', '\\"').replace("'", "\\'")
+            selector_parts.append(f'[{attr}="{escaped_value}"]')
+        else:
+            # 숫자나 다른 타입도 문자열로 변환
+            selector_parts.append(f'[{attr}="{str(value)}"]')
+    
+    return ''.join(selector_parts)
+
+
 def extract_interactive_elements(html_string: str) -> List[Dict]:
     """
     HTML 문자열에서 인터랙션 가능한 요소만 추출
     
     Returns:
-        List[Dict]: [{tag, text, selector, type}, ...]
+        List[Dict]: [{index, tag, text, type, attributes}, ...]
     """
     if not html_string or not isinstance(html_string, str):
         return []
@@ -247,7 +274,7 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
         elements = []
         seen_ids = set()  # 중복 제거용
         
-        # 먼저 모든 요소를 수집한 후 selector 생성 (중복 체크를 위해)
+        # 먼저 모든 요소를 수집
         temp_elements = []
         for el in found:
             # 중복 제거
@@ -257,13 +284,9 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
             seen_ids.add(el_id)
             temp_elements.append(el)
         
-        # selector 생성 (중복 체크를 위해 두 단계로 나눔)
-        for el in temp_elements:
-            # 2. 필요한 속성만 추출
+        # 요소 데이터 생성 (인덱스 포함)
+        for index, el in enumerate(temp_elements):
             tag = el.name
-            
-            # selector는 태그만 사용
-            selector_str = tag
             
             # 텍스트 추출
             text = (
@@ -293,7 +316,7 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
             else:
                 element_type = 'button'
             
-            # 3. 모든 속성 추출
+            # 모든 속성 추출
             attrs = {}
             for attr, value in el.attrs.items():
                 # 리스트나 복잡한 객체는 문자열로 변환
@@ -302,11 +325,11 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
                 else:
                     attrs[attr] = str(value) if value else ''
             
-            # 4. JSON으로 만들기 (모든 속성 포함)
+            # JSON으로 만들기 (인덱스 포함, selector 제거)
             element_data = {
+                'index': index,
                 'tag': tag,
                 'text': text.strip() or None,
-                'selector': selector_str,
                 'type': element_type,
             }
             

@@ -5,7 +5,7 @@ Railway 배포용 AI API 프록시
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict
 import os
 import httpx
 import json
@@ -38,6 +38,7 @@ def get_openai_api_key():
 class Step(BaseModel):
     text: str
     selector: Optional[str] = None
+    elementIndex: Optional[int] = None  # AI가 반환하는 요소 인덱스
 
 
 class GuidanceRequest(BaseModel):
@@ -237,12 +238,12 @@ async def get_guidance(request: GuidanceRequest):
             logger.info(f"OpenAI 응답 원문: {raw}")
             
             # JSON 파싱
-            parsed = parse_ai_response(raw)
+            parsed = parse_ai_response(raw, interactive_elements)
             logger.info(f"파싱 완료: {len(parsed.get('steps', []))}개 단계")
             
             # 각 단계의 selector 확인
             for i, step in enumerate(parsed.get('steps', []), 1):
-                logger.info(f"단계 {i}: text={step.get('text')}, selector={step.get('selector')}")
+                logger.info(f"단계 {i}: text={step.get('text')}, selector={step.get('selector')}, elementIndex={step.get('elementIndex')}")
             
             return GuidanceResponse(steps=parsed.get("steps", []))
             
@@ -261,11 +262,14 @@ async def get_guidance(request: GuidanceRequest):
         raise HTTPException(status_code=500, detail=f"서버 오류: {error_msg}")
 
 
-def parse_ai_response(raw: str) -> dict:
+def parse_ai_response(raw: str, interactive_elements: List[Dict] = None) -> dict:
     """
     AI 응답 텍스트에서 JSON 추출 → steps 배열로 정규화
+    elementIndex를 받아서 selector를 룰베이스로 생성
     """
+    from backend.extract_elements import generate_selector_from_attributes
     import re
+    
     cleaned = re.sub(r"^```(?:json)?\s*\n?", "", raw, flags=re.IGNORECASE)
     cleaned = re.sub(r"\n?```\s*$", "", cleaned).strip()
     
@@ -285,9 +289,40 @@ def parse_ai_response(raw: str) -> dict:
                 steps = []
                 for s in obj["steps"]:
                     if isinstance(s, dict) and s.get("text"):
+                        text = str(s["text"]).strip()
+                        element_index = s.get("elementIndex")
+                        
+                        # elementIndex로 selector 생성 (룰베이스)
+                        selector = None
+                        if element_index is not None and interactive_elements:
+                            try:
+                                element_index = int(element_index)
+                                if 0 <= element_index < len(interactive_elements):
+                                    element = interactive_elements[element_index]
+                                    tag = element.get('tag', '')
+                                    text = element.get('text', '')
+                                    attributes = element.get('attributes', {})
+                                    selector = generate_selector_from_attributes(tag, attributes)
+                                    
+                                    # AI가 선택한 요소 상세 정보 로깅
+                                    logger.info("=" * 80)
+                                    logger.info(f"AI가 선택한 요소 (인덱스 {element_index}):")
+                                    logger.info(f"  - tag: {tag}")
+                                    logger.info(f"  - text: {text}")
+                                    logger.info(f"  - type: {element.get('type', '')}")
+                                    logger.info(f"  - attributes: {attributes}")
+                                    logger.info(f"  - 생성된 selector: {selector}")
+                                    logger.info("=" * 80)
+                                else:
+                                    logger.warning(f"요소 인덱스 {element_index}가 범위를 벗어남 (총 {len(interactive_elements)}개)")
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"요소 인덱스 파싱 실패: {element_index}, {e}")
+                        elif element_index is None:
+                            logger.info("AI가 elementIndex를 반환하지 않음 (비상호작용 단계일 수 있음)")
+                        
                         steps.append({
-                            "text": str(s["text"]).strip(),
-                            "selector": (s.get("selector") or "").strip() or None
+                            "text": text,
+                            "selector": selector
                         })
                 if steps:
                     return {"steps": steps}
@@ -296,12 +331,24 @@ def parse_ai_response(raw: str) -> dict:
             if obj.get("text") and isinstance(obj["text"], str):
                 text = obj["text"].strip()
                 if text and "{" not in text:
+                    # 하위 호환: selector가 직접 제공된 경우
                     selector = (obj.get("selector") or "").strip() or None
+                    element_index = obj.get("elementIndex")
+                    if element_index is not None and not selector and interactive_elements:
+                        try:
+                            element_index = int(element_index)
+                            if 0 <= element_index < len(interactive_elements):
+                                element = interactive_elements[element_index]
+                                tag = element.get('tag', '')
+                                attributes = element.get('attributes', {})
+                                selector = generate_selector_from_attributes(tag, attributes)
+                        except (ValueError, TypeError):
+                            pass
                     return {"steps": [{"text": text, "selector": selector}]}
     except json.JSONDecodeError as e:
-        pass
+        logger.error(f"JSON 파싱 오류: {e}")
     except Exception as e:
-        pass
+        logger.error(f"파싱 오류: {e}")
     
     # 파싱 실패 시
     return {
