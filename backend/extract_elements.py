@@ -61,7 +61,7 @@ def generate_selector(element) -> Optional[str]:
 
 
 def get_element_text(element) -> str:
-    """요소의 텍스트 추출"""
+    """요소의 텍스트 추출 (공백 보존)"""
     if not element:
         return ''
     
@@ -79,8 +79,10 @@ def get_element_text(element) -> str:
             return first_option.get_text(strip=True)
         return ''
     
-    # 일반 요소는 직접 텍스트만
-    return element.get_text(strip=True)
+    # 일반 요소는 텍스트 추출 (공백 보존)
+    # get_text(separator=' ')를 사용하여 자식 요소 간 공백 추가
+    text = element.get_text(separator=' ', strip=True)
+    return text
 
 
 def is_clickable(element) -> bool:
