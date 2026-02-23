@@ -139,7 +139,7 @@ def is_clickable(element) -> bool:
 
 def extract_interactive_elements(html_string: str) -> List[Dict]:
     """
-    HTML 문자열에서 클릭 가능한 요소와 입력 요소를 추출
+    HTML 문자열에서 인터랙션 가능한 요소만 추출
     
     Returns:
         List[Dict]: [{tag, text, selector, type}, ...]
@@ -152,97 +152,75 @@ def extract_interactive_elements(html_string: str) -> List[Dict]:
         if not soup.body:
             return []
         
-        elements = []
-        clickable_elements = set()
-        
-        # 1. 클릭 가능한 요소들
-        clickable_selectors = [
+        # 1. 인터랙션 요소만 한 번에 찾기
+        interactive_selectors = [
             'button',
-            'a[href]',
-            '[role="button"]',
-            'input[type="submit"]',
-            'input[type="button"]',
-            'input[type="image"]',
-            '[data-testid]',
-            '[data-id]',
-            '[aria-label]',
-            '.mat-button',
+            'a',
+            'input',
+            'textarea',
+            'select',
+            '[role="button"]'
         ]
         
-        for selector in clickable_selectors:
-            try:
-                found = soup.body.select(selector)
-                for el in found:
-                    if is_clickable(el) and id(el) not in clickable_elements:
-                        clickable_elements.add(id(el))
-                        
-                        selector_str = generate_selector(el)
-                        if not selector_str:
-                            continue
-                        
-                        text = (
-                            get_element_text(el) or
-                            el.get('aria-label', '') or
-                            el.get('title', '') or
-                            el.get('placeholder', '') or
-                            el.get('value', '') or
-                            ''
-                        )
-                        
-                        elements.append({
-                            'tag': el.name,
-                            'text': text.strip() or None,
-                            'selector': selector_str,
-                            'type': 'button',
-                        })
-            except Exception:
+        # CSS selector 조합
+        selector_str = ', '.join(interactive_selectors)
+        found = soup.body.select(selector_str)
+        
+        elements = []
+        seen_ids = set()  # 중복 제거용
+        
+        for el in found:
+            # 중복 제거
+            el_id = id(el)
+            if el_id in seen_ids:
                 continue
-        
-        # 2. 입력 요소들
-        input_tags = ['input', 'textarea', 'select']
-        for tag in input_tags:
-            try:
-                found = soup.body.find_all(tag)
-                for el in found:
-                    # 이미 클릭 가능한 요소로 추가된 경우 스킵
-                    if id(el) in clickable_elements:
-                        continue
-                    
-                    selector_str = generate_selector(el)
-                    if not selector_str:
-                        continue
-                    
-                    text = (
-                        get_element_text(el) or
-                        el.get('placeholder', '') or
-                        el.get('aria-label', '') or
-                        el.get('title', '') or
-                        el.get('name', '') or
-                        ''
-                    )
-                    
-                    input_type = el.get('type', 'text') if el.name == 'input' else el.name
-                    element_type = 'textarea' if input_type == 'textarea' else ('select' if input_type == 'select' else 'input')
-                    
-                    elements.append({
-                        'tag': el.name,
-                        'text': text.strip() or None,
-                        'selector': selector_str,
-                        'type': element_type,
-                    })
-            except Exception:
+            seen_ids.add(el_id)
+            
+            # 2. 필요한 속성만 추출
+            tag = el.name
+            
+            # selector 생성
+            selector_str = generate_selector(el)
+            if not selector_str:
                 continue
+            
+            # 텍스트 추출
+            text = (
+                get_element_text(el) or
+                el.get('aria-label', '') or
+                el.get('title', '') or
+                el.get('placeholder', '') or
+                el.get('value', '') or
+                ''
+            )
+            
+            # 타입 결정
+            if tag == 'button' or (tag == 'a' and el.get('href')) or el.get('role') == 'button':
+                element_type = 'button'
+            elif tag == 'input':
+                input_type = el.get('type', 'text')
+                if input_type in ['submit', 'button', 'image']:
+                    element_type = 'button'
+                else:
+                    element_type = 'input'
+            elif tag == 'textarea':
+                element_type = 'textarea'
+            elif tag == 'select':
+                element_type = 'select'
+            elif tag == 'a':
+                element_type = 'button'  # 링크도 클릭 가능하므로 button으로 분류
+            else:
+                element_type = 'button'
+            
+            # 3. JSON으로 만들기
+            elements.append({
+                'tag': tag,
+                'text': text.strip() or None,
+                'selector': selector_str,
+                'type': element_type,
+            })
         
-        # 중복 제거 (동일한 selector)
-        seen = set()
-        unique = []
-        for el in elements:
-            key = el['selector']
-            if key not in seen:
-                seen.add(key)
-                unique.append(el)
-        
-        return unique
+        return elements
     
     except Exception as e:
         import logging

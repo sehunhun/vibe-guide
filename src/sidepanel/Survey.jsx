@@ -47,6 +47,10 @@ export default function Survey({ onComplete }) {
   }
 
   async function handleStart() {
+    // 진행순서 1번 도메인으로 이동
+    if (plan?.steps?.length > 0 && plan.steps[0]?.url) {
+      chrome.tabs.create({ url: plan.steps[0].url });
+    }
     onComplete(plan);
   }
 

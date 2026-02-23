@@ -82,7 +82,7 @@ export const TOOLS = [
     id: 'google-ai-studio',
     name: 'Google AI Studio',
     category: 'vibe',
-    url: 'https://aistudio.google.com/apps',
+    url: 'https://aistudio.google.com',
     logo: '🤖',
     tagline: 'Google AI로 랜딩페이지 제작',
     desc: 'Google AI Studio로 랜딩페이지를 만들 수 있는 툴',

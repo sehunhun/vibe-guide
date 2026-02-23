@@ -68,9 +68,16 @@ export default function SurveyApp() {
   function handleStart() {
     // Chrome Extension 환경인지 확인
     if (typeof chrome !== 'undefined' && chrome.windows && chrome.sidePanel) {
-      // 클릭이 사용자 제스처이므로 같은 스택에서 사이드패널 열기 시도
+      // 사이드패널 열기
       chrome.windows.getCurrent().then(win => {
-        if (win?.id) chrome.sidePanel.open({ windowId: win.id });
+        if (win?.id) {
+          chrome.sidePanel.open({ windowId: win.id });
+          
+          // 진행순서 1번 도메인으로 이동
+          if (plan?.steps?.length > 0 && plan.steps[0]?.url) {
+            chrome.tabs.create({ url: plan.steps[0].url });
+          }
+        }
       }).catch(() => {
         // 제스처 인정 안 되면 가이드 탭으로 이동
         if (chrome.runtime && chrome.runtime.getURL) {

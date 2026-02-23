@@ -4,38 +4,17 @@
  */
 
 import { getDomainGuide, getDomainIdFromUrl } from './guides.js';
+import { buildPlanContext, buildPageState } from './prompts/buildContext.js';
 
 /**
  * 시스템 프롬프트 로드
  */
-async function loadSystemPrompt() {
-  try {
-    const { SYSTEM_PROMPT } = await import('./prompts/system.js');
-    return SYSTEM_PROMPT;
-  } catch (error) {
-    console.error('[vibe-guide] 시스템 프롬프트 로드 실패:', error);
-    // Fallback: 기본 시스템 프롬프트
-    return `You are a web guide assistant for non-developers.
+// 정적 import로 변경 (동적 import가 background에서 문제를 일으킴)
+import { SYSTEM_PROMPT } from './prompts/system.js';
 
-**Core Goal**: Based on the user's survey responses and project plan (Step1), guide them through **exactly one next actionable UI step** on the current webpage.
-
-**Output Format**:
-You must output ONLY the following JSON. Do not include any other explanation.
-{
-  "steps": [
-    { "text": "Next step instruction (e.g., Click the 'Get Started' button at the top)", "selector": "CSS selector for the element or null" }
-  ]
-}
-
-**Critical Rules**:
-1. **Generate exactly ONE step**: The steps array must contain exactly one step. Do not generate multiple steps at once.
-2. **Never repeat completed steps**: Do not repeat steps that have already been completed or guided. Exclude already completed tasks and generate only **one new next step**.
-3. **Select next step for plan achievement**: Select **one next task** that hasn't been performed yet to achieve the survey responses and project plan. Exclude already completed steps or previously guided steps.
-4. **Consider completion status**: If all previous steps are completed, generate one new next step. If there are incomplete steps, you can re-guide or update that step.
-5. **Combine consecutive actions**: Do not separate consecutive actions like "enter" and "submit" into separate steps. Combine them into one step. Example: "Enter and submit" or "Enter then submit".
-6. **Only actionable steps**: Only add steps that users can actually perform (click, type, input, select, drag, etc.). Do not include passive actions like "read", "check", "view", "refer to". Examples: "Click the button", "Enter text", "Select an option", etc.
-7. **Selector**: The selector must be a valid CSS selector that can be found with document.querySelector(). Prefer id, data attributes, roles (button, a), etc. If unclear or not applicable, return null.`;
-  }
+function loadSystemPrompt() {
+  // 정적 import를 사용하므로 동기 함수로 변경
+  return SYSTEM_PROMPT;
 }
 
 /**
@@ -47,33 +26,45 @@ You must output ONLY the following JSON. Do not include any other explanation.
  * @returns {Promise<{messages: Array<{role: string, content: string}>}>}
  */
 export async function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
-  const { buildPlanContext, buildPageState } = await import('./prompts/buildContext.js');
-  
-  // 1. 시스템 프롬프트 로드
-  const systemPrompt = await loadSystemPrompt();
-  console.log('[vibe-guide] ===== SYSTEM PROMPT =====');
-  console.log(systemPrompt);
-  console.log('[vibe-guide] ========================');
-  
-  // 2. 전략/플랜 컨텍스트 생성
-  const planContext = buildPlanContext(context, domainGuide);
-  console.log('[vibe-guide] ===== PLAN CONTEXT =====');
-  console.log(planContext);
-  console.log('[vibe-guide] ========================');
-  
-  // 3. 페이지 상태 생성
-  const pageState = await buildPageState(pageUrl, pageContext, context.previousStepsForUrl);
-  console.log('[vibe-guide] ===== PAGE STATE =====');
-  console.log(pageState);
-  console.log('[vibe-guide] =====================');
-  
-  return {
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: planContext },
-      { role: 'user', content: pageState },
-    ],
-  };
+  try {
+    console.log('[vibe-guide] buildPrompt 시작');
+    
+    // 1. 시스템 프롬프트 로드
+    console.log('[vibe-guide] 시스템 프롬프트 로드 시작');
+    const systemPrompt = loadSystemPrompt();
+    console.log('[vibe-guide] ===== SYSTEM PROMPT =====');
+    console.log(systemPrompt);
+    console.log('[vibe-guide] ========================');
+    
+    // 2. 전략/플랜 컨텍스트 생성
+    console.log('[vibe-guide] 플랜 컨텍스트 생성 시작');
+    const planContext = buildPlanContext(context, domainGuide);
+    console.log('[vibe-guide] ===== PLAN CONTEXT =====');
+    console.log(planContext);
+    console.log('[vibe-guide] ========================');
+    
+    // 3. 페이지 상태 생성
+    console.log('[vibe-guide] 페이지 상태 생성 시작');
+    const pageState = buildPageState(pageUrl, pageContext, context.previousStepsForUrl);
+    console.log('[vibe-guide] ===== PAGE STATE =====');
+    console.log(pageState);
+    console.log('[vibe-guide] =====================');
+    
+    const result = {
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: planContext },
+        { role: 'user', content: pageState },
+      ],
+    };
+    
+    console.log('[vibe-guide] buildPrompt 완료, 반환:', result);
+    return result;
+  } catch (error) {
+    console.error('[vibe-guide] buildPrompt 오류:', error);
+    console.error('[vibe-guide] 오류 스택:', error.stack);
+    throw error;
+  }
 }
 
 // 백엔드 서버 URL (하드코딩)
@@ -225,39 +216,57 @@ export function hasValidApiKey() {
  * @returns {Promise<{ steps: Array<{ text: string, selector: string|null }> }>}
  */
 export async function getPageGuidance(context, pageContext, pageUrl) {
-  const { modelId, backendUrl } = await getStoredAISettings();
-  
-  if (!backendUrl || !backendUrl.trim()) {
-    throw new Error('설정에서 백엔드 서버 URL을 입력해주세요.');
-  }
-
-  // 도메인별 가이드 문서 로드 (프롬프트 캐싱을 위해)
-  const domainId = getDomainIdFromUrl(pageUrl);
-  const domainGuide = domainId ? await getDomainGuide(domainId) : null;
-
-  const promptResult = await buildPrompt(context, pageContext, pageUrl, domainGuide);
-  console.log('[vibe-guide] messages 원문:', promptResult);
-  const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
-
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const result = await callBackend(
-        backendUrl,
-        modelId,
-        messages,
-        pageContext.type,
-        imageDataUrl
-      );
-      if (!isParseFailureResult(result)) return result;
-      if (attempt < maxAttempts) {
-        console.warn(`[vibe-guide] AI 응답 파싱 실패, 재시도 ${attempt}/${maxAttempts}`);
-      }
-    } catch (err) {
-      console.error(`[vibe-guide] 백엔드 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
-      if (attempt >= maxAttempts) throw err;
+  try {
+    console.log('[vibe-guide] getPageGuidance 시작:', { pageUrl, type: pageContext.type });
+    
+    const { modelId, backendUrl } = await getStoredAISettings();
+    
+    if (!backendUrl || !backendUrl.trim()) {
+      throw new Error('설정에서 백엔드 서버 URL을 입력해주세요.');
     }
-  }
 
-  return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
+    // 도메인별 가이드 문서 로드 (프롬프트 캐싱을 위해)
+    console.log('[vibe-guide] 도메인 가이드 로드 시작');
+    const domainId = getDomainIdFromUrl(pageUrl);
+    console.log('[vibe-guide] 도메인 ID:', domainId);
+    const domainGuide = domainId ? await getDomainGuide(domainId) : null;
+    console.log('[vibe-guide] 도메인 가이드 로드 완료:', domainGuide ? '있음' : '없음');
+
+    console.log('[vibe-guide] buildPrompt 호출 전');
+    const promptResult = await buildPrompt(context, pageContext, pageUrl, domainGuide);
+    console.log('[vibe-guide] buildPrompt 완료, messages 원문:', promptResult);
+    const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
+
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`[vibe-guide] 백엔드 API 호출 시도 ${attempt}/${maxAttempts}`);
+        const result = await callBackend(
+          backendUrl,
+          modelId,
+          promptResult,
+          pageContext.type,
+          imageDataUrl
+        );
+        if (!isParseFailureResult(result)) {
+          console.log('[vibe-guide] 백엔드 API 호출 성공:', result);
+          return result;
+        }
+        if (attempt < maxAttempts) {
+          console.warn(`[vibe-guide] AI 응답 파싱 실패, 재시도 ${attempt}/${maxAttempts}`);
+        }
+      } catch (err) {
+        console.error(`[vibe-guide] 백엔드 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
+        console.error('[vibe-guide] 오류 스택:', err.stack);
+        if (attempt >= maxAttempts) throw err;
+      }
+    }
+
+    console.warn('[vibe-guide] 모든 시도 실패, fallback 반환');
+    return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
+  } catch (error) {
+    console.error('[vibe-guide] getPageGuidance 전체 오류:', error);
+    console.error('[vibe-guide] 오류 스택:', error.stack);
+    throw error;
+  }
 }

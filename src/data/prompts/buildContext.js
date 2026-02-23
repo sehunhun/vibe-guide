@@ -125,9 +125,9 @@ export function buildPlanContext(context, domainGuide = null) {
  * @param {string} pageUrl - 현재 페이지 URL
  * @param {{ type: 'html'|'image', content: string }} pageContext - HTML 또는 이미지
  * @param {{ steps: Array<{text,selector?}>, completed: boolean[] }|null} previousStepsForUrl - 이전 단계들
- * @returns {Promise<string>} 페이지 상태 텍스트
+ * @returns {string} 페이지 상태 텍스트
  */
-export async function buildPageState(pageUrl, pageContext, previousStepsForUrl = null) {
+export function buildPageState(pageUrl, pageContext, previousStepsForUrl = null) {
   const parts = [
     '[PAGE INTERACTION ELEMENTS]',
     '',
