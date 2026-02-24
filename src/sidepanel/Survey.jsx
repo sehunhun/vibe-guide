@@ -47,6 +47,20 @@ export default function Survey({ onComplete }) {
   }
 
   async function handleStart() {
+    // 플랜의 첫 번째 단계 URL 찾기
+    const firstStep = plan.steps?.[0];
+    const targetUrl = firstStep?.url || plan.tools?.find(t => t.id === firstStep?.toolId)?.url;
+    
+    // 첫 번째 도메인 링크로 이동
+    if (targetUrl) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const activeTab = tabs[0];
+        if (activeTab?.id) {
+          chrome.tabs.update(activeTab.id, { url: targetUrl });
+        }
+      });
+    }
+    
     onComplete(plan);
   }
 

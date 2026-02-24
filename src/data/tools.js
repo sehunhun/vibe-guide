@@ -61,6 +61,16 @@ export const QUESTIONS = [
     ],
   },
   {
+    id: 'teamType',
+    title: '팀인가요, 개인인가요?',
+    emoji: '👥',
+    type: 'single',
+    options: [
+      { id: 'individual', label: '개인', desc: '혼자서 진행' },
+      { id: 'team', label: '팀', desc: '여러 명이 함께 작업' },
+    ],
+  },
+  {
     id: 'budget',
     title: '월 예산 계획은 어떻게 되나요?',
     emoji: '💰',
