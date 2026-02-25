@@ -7,7 +7,7 @@ create table tools (
   category text, -- 툴 카테고리 (예: "frontend_hosting", "database", "auth", "payment", "monitoring")
   website text, -- 툴 공식 웹사이트 URL
   description text, -- 툴 설명/소개
-  popularity_rank_percentile numeric default 0, -- 인기도 순위 백분위 (0~100, Product Hunt 기준)
+  popularity_rank_percentile numeric default 0, -- 인기도 5구간 (0, 0.25, 0.5, 0.75, 1). 전체 N개 중 1등=1, 막등=0 (예: 10개면 1,2등=1, 9,10등=0)
   created_at timestamptz default now() -- 생성 시각
 );
 

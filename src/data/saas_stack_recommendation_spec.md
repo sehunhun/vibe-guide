@@ -118,7 +118,7 @@ tool_id (pk)\
 name\
 category\
 website\
-popularity_rank_percentile (0\~100)
+popularity_rank_percentile (0, 0.25, 0.5, 0.75, 1 — 전체 5구간)
 
 ## Plan Table
 
@@ -165,7 +165,7 @@ budget_ratio = total_cost / user_budget
 
 ## 8.3 Popularity Bonus
 
-popularity_bonus = (popularity_rank_percentile / 100) \* 20
+popularity_bonus = popularity_rank_percentile \* 20
 
 If multiple tools: use average percentile.
 
@@ -207,8 +207,10 @@ Steps:
 
 ## 9.3 Popularity Score Calculation
 
-popularity_rank_percentile =\
-100 - ((rank_position / total_tools) \* 100)
+전체 개수를 5구간으로 나누어 0, 0.25, 0.5, 0.75, 1 저장. 1등=1, 막등=0 (예: 10개면 1,2등=1, 9,10등=0).
+
+quintile_index = (rank_one_based - 1) \* 5 // total_tools\
+popularity_rank_percentile = (4 - quintile_index) / 4
 
 Store in tool.popularity_rank_percentile
 
