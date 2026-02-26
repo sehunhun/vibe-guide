@@ -48,6 +48,7 @@ _EXTRACT_MD_JS = """
   function walk(el, level) {
     if (!el || out.length > 5000) return;
     const tag = (el.tagName || '').toLowerCase();
+    if (tag === 'svg') { return; }
     const t = text(el);
     const h = href(el);
     const k = key(t, h);

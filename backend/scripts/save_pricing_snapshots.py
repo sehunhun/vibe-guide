@@ -49,10 +49,52 @@ _EXTRACT_MD_JS = """
     return a ? (a.getAttribute('href') || '') : '';
   }
   function key(t, h) { return (t.slice(0, 80) + '|' + h).trim(); }
+  function cellText(c) {
+    const s = text(c).trim();
+    if (c.querySelector('svg')) return s ? s + ' {icon}' : '{icon}';
+    return s || ' ';
+  }
 
   function walk(el, level) {
     if (!el || out.length > 6000) return;
     const tag = (el.tagName || '').toLowerCase();
+    if (tag === 'svg') { return; }
+    if (tag === 'section' || tag === 'div') {
+      try {
+        if (getComputedStyle(el).display === 'grid') {
+          const rows = Array.from(el.children);
+          if (rows.length > 0) {
+            const firstCells = Array.from(rows[0].children);
+            const numCols = firstCells.length;
+            if (numCols >= 2 && numCols <= 24 && rows.every(r => r.children.length === numCols)) {
+              const keyGrid = 'grid:' + rows[0].textContent.slice(0, 60);
+              if (!seen.has(keyGrid)) {
+                seen.add(keyGrid);
+                for (const row of rows) {
+                  const cells = Array.from(row.children).map(cellText);
+                  out.push('| ' + cells.join(' | ') + ' |');
+                }
+              }
+              return;
+            }
+            const gtc = getComputedStyle(el).gridTemplateColumns;
+            const colCount = (gtc && gtc !== 'none') ? gtc.trim().split(/\\s+/).length : 0;
+            if (colCount >= 2 && colCount <= 24) {
+              const keyGrid2 = 'grid2:' + text(el).slice(0, 60);
+              if (!seen.has(keyGrid2)) {
+                seen.add(keyGrid2);
+                const flat = Array.from(el.children);
+                for (let i = 0; i < flat.length; i += colCount) {
+                  const rowCells = flat.slice(i, i + colCount).map(cellText);
+                  if (rowCells.some(Boolean)) out.push('| ' + rowCells.join(' | ') + ' |');
+                }
+              }
+              return;
+            }
+          }
+        }
+      } catch (err) {}
+    }
     const t = text(el);
     const h = href(el);
     const k = key(t, h);
@@ -72,7 +114,12 @@ _EXTRACT_MD_JS = """
     if (tag === 'p' && t) { seen.add(k); out.push(t); out.push(''); return; }
     if (tag === 'li' && t) { seen.add(k); out.push('- ' + t.replace(/\\n/g, ' ').slice(0, 300)); return; }
     if (tag === 'tr') {
-      const cells = Array.from(el.querySelectorAll('td, th')).map(c => text(c)).filter(Boolean);
+      const cells = Array.from(el.querySelectorAll('td, th')).map(c => {
+        const t = text(c).trim();
+        const hasSvg = c.querySelector('svg');
+        if (hasSvg) return t ? t + ' {icon}' : '{icon}';
+        return t || ' ';
+      });
       if (cells.length) { const row = '| ' + cells.join(' | ') + ' |'; seen.add(k); out.push(row); }
       return;
     }
