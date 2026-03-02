@@ -8,7 +8,6 @@ export const REQUIREMENT_TO_SERVICE = {
   db: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
   storage: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
   login: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
-  auth: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
   payment: { id: 'stripe', name: 'Stripe', icon: '💳', url: 'https://stripe.com' },
   'frontend-hosting': { id: 'vercel', name: 'Vercel', icon: '▲', url: 'https://vercel.com' },
   'backend-hosting': { id: 'railway', name: 'Railway', icon: '🚂', url: 'https://railway.app' },
@@ -16,6 +15,42 @@ export const REQUIREMENT_TO_SERVICE = {
   email: { id: 'resend', name: 'Resend', icon: '📧', url: 'https://resend.com' },
   monitoring: { id: 'sentry', name: 'Sentry', icon: '🛡️', url: 'https://sentry.io' },
   'headless-cms': { id: 'sanity', name: 'Sanity', icon: '📝', url: 'https://sanity.io' },
+};
+
+/** 도구별 간략 설명 + 비개발자용 "왜 필요한지" (선택한 서비스 드롭다운용) */
+export const SERVICE_DESCRIPTIONS = {
+  supabase: {
+    summary: '데이터베이스, 로그인, 파일 저장을 한 곳에서 처리하는 백엔드 서비스예요.',
+    whyNeeded: '회원가입·로그인, 게시글·댓글 저장, 업로드한 파일 보관처럼 "서버에 뭔가 저장해야 하는" 기능은 Supabase가 대신 해줘요. 직접 서버를 만들 필요가 없어요.',
+  },
+  stripe: {
+    summary: '카드·간편결제를 웹사이트에 붙일 때 쓰는 결제 대행 서비스예요.',
+    whyNeeded: '결제는 보안·법 규정이 까다로워서, 전문 서비스(Stripe)를 쓰는 게 안전해요. 상품/정기구독 결제를 쉽게 넣을 수 있어요.',
+  },
+  vercel: {
+    summary: '만든 웹사이트를 인터넷에 올려 누구나 접속할 수 있게 해주는 호스팅 서비스예요.',
+    whyNeeded: '코드만 있으면 되는 게 아니라 "어디선가 계속 돌아가게" 해야 해요. Vercel이 그 역할을 해줘서, 링크 하나로 사이트를 공개할 수 있어요.',
+  },
+  railway: {
+    summary: '백엔드 서버나 API를 인터넷에 올려서 24시간 돌아가게 해주는 호스팅이에요.',
+    whyNeeded: '데이터 처리·예약·알림 같은 일을 하는 서버 코드를 안정적으로 켜 두려면 Railway 같은 서비스가 필요해요. 직접 컴퓨터를 켜 둘 필요가 없어요.',
+  },
+  ga4: {
+    summary: 'Google에서 제공하는 방문자 분석 도구예요. 누가, 어디서, 어떤 페이지를 봤는지 볼 수 있어요.',
+    whyNeeded: '사이트를 개선하려면 "몇 명이 왔는지, 어디서 유입됐는지"를 알아야 해요. GA4를 붙이면 대시보드에서 한눈에 볼 수 있어요.',
+  },
+  resend: {
+    summary: '웹사이트에서 이메일을 보낼 때 쓰는 발송 서비스예요.',
+    whyNeeded: '가입 환영 메일, 비밀번호 찾기, 알림 메일처럼 "사이트가 자동으로 메일을 보내는" 기능을 안정적으로 쓰려면 Resend 같은 서비스가 필요해요.',
+  },
+  sentry: {
+    summary: '사이트에서 발생한 오류를 자동으로 잡아서 알려주는 모니터링 도구예요.',
+    whyNeeded: '문제가 생겨도 사용자가 직접 문의하기 전에 "어디서, 왜" 터졌는지 알 수 있어요. 빠르게 수정할 수 있어요.',
+  },
+  sanity: {
+    summary: '글·이미지 같은 콘텐츠를 관리하는 헤드리스 CMS예요. 관리 화면에서 수정하면 사이트에 반영돼요.',
+    whyNeeded: '블로그, 랜딩 문구, 메뉴 이름처럼 "개발자 없이도 나중에 바꾸고 싶은" 내용을 Sanity에서 편집하고, 사이트는 그걸 불러와서 보여줄 수 있어요.',
+  },
 };
 
 /**
@@ -288,32 +323,18 @@ export function buildPlanFromSurveyTools(surveyResult) {
     order: i + 1,
   }));
 
-  const steps = toolsWithOrder.flatMap((tool, order) => [
-    {
-      stepId: `${tool.id}_signup`,
-      toolId: tool.id,
-      toolName: tool.name,
-      toolIcon: tool.logo,
-      order: order * 2,
-      status: 'pending',
-      title: `${tool.name} 계정 만들기`,
-      desc: `${tool.name} 공식 사이트에서 계정을 생성하세요.`,
-      url: tool.url,
-      type: 'signup',
-    },
-    {
-      stepId: `${tool.id}_setup`,
-      toolId: tool.id,
-      toolName: tool.name,
-      toolIcon: tool.logo,
-      order: order * 2 + 1,
-      status: 'pending',
-      title: `${tool.name} 연결·설정하기`,
-      desc: `프로젝트에 ${tool.name}를 연결하세요.`,
-      url: tool.url,
-      type: 'start',
-    },
-  ]).sort((a, b) => a.order - b.order);
+  const steps = toolsWithOrder.map((tool, order) => ({
+    stepId: tool.id,
+    toolId: tool.id,
+    toolName: tool.name,
+    toolIcon: tool.logo,
+    order,
+    status: 'pending',
+    title: tool.name,
+    desc: `${tool.name} 사이트에서 계정을 만들고 연결하세요.`,
+    url: tool.url,
+    type: 'tool',
+  }));
 
   const currentStepId = steps[0]?.stepId || null;
 

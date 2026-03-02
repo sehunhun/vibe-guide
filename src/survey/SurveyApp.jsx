@@ -1,25 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { getSurveyTools, getStoredAISettings } from '../data/ai.js';
-import { storage, getUniqueServicesFromSelectedTools, buildSurveyPayload } from '../data/planner.js';
+import {
+  storage,
+  getUniqueServicesFromSelectedTools,
+  buildSurveyPayload,
+  buildRequirementObjects,
+  REQUIREMENT_TO_SERVICE,
+  SERVICE_DESCRIPTIONS,
+} from '../data/planner.js';
 
 const SINGLE_QUESTION = '어떤 웹사이트를 만들고 싶으신가요?';
 
 export default function SurveyApp() {
-  const [step, setStep] = useState(0); // 0: 질문 입력, 1: 도구 체크박스, 2: 서비스 요약 + 시작하기
+  const [step, setStep] = useState(0);
   const [siteGoal, setSiteGoal] = useState('');
   const [aiTools, setAiTools] = useState([]);
   const [selectedToolIds, setSelectedToolIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showResult, setShowResult] = useState(false);
-  const [plan, setPlan] = useState(null);
+  const [expandedServiceId, setExpandedServiceId] = useState(null);
 
   useEffect(() => {
     storage.getPlan().then(saved => {
-      if (saved) {
-        setPlan(saved);
-        setShowResult(true);
+      if (saved?.tools?.length) {
+        window.location.href = typeof chrome !== 'undefined' && chrome.runtime?.getURL
+          ? chrome.runtime.getURL('guide.html')
+          : '/guide.html';
+        return;
       }
       setLoading(false);
     });
@@ -69,37 +77,35 @@ export default function SurveyApp() {
     setStep(2);
   }
 
-  async function handleStart() {
+  async function handleGuideStart() {
     const selected = aiTools.filter(t => selectedToolIds.has(t.id));
     const payload = buildSurveyPayload({
       siteGoal: siteGoal.trim(),
       selectedTools: selected,
     });
     await storage.savePlan(payload);
-    setPlan(payload);
-    setShowResult(true);
-  }
-
-  function handleOpenGuide() {
+    const firstUrl = payload.steps?.[0]?.url || payload.tools?.[0]?.url;
+    if (firstUrl && typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) chrome.tabs.update(tabs[0].id, { url: firstUrl });
+      });
+    }
     if (typeof chrome !== 'undefined' && chrome.windows && chrome.sidePanel) {
       chrome.windows.getCurrent().then(win => {
         if (win?.id) chrome.sidePanel.open({ windowId: win.id });
       }).catch(() => {
-        if (chrome.runtime?.getURL) {
-          window.location.href = chrome.runtime.getURL('guide.html');
-        }
+        if (chrome.runtime?.getURL) window.location.href = chrome.runtime.getURL('guide.html');
       });
+    } else if (firstUrl) {
+      window.location.href = firstUrl;
     } else {
-      alert('가이드를 시작하려면 Chrome Extension을 설치해주세요.\n\n설문 결과는 저장되었습니다.');
+      alert('가이드를 시작하려면 Chrome Extension을 설치해주세요.');
     }
-  }
-
-  if (showResult && plan) {
-    return <PlanResult plan={plan} onStart={handleOpenGuide} />;
   }
 
   const selectedTools = step === 2 ? aiTools.filter(t => selectedToolIds.has(t.id)) : [];
   const uniqueServices = step === 2 ? getUniqueServicesFromSelectedTools(selectedTools) : [];
+  const requirementObjects = step === 2 ? buildRequirementObjects(selectedTools) : [];
 
   return (
     <div className="survey-page">
@@ -182,18 +188,47 @@ export default function SurveyApp() {
             <div className="question-section">
               <div className="question-emoji">✅</div>
               <h1 className="question-title">선택한 서비스</h1>
-              <p className="question-hint">아래 서비스들로 시작할 수 있어요</p>
+              <p className="question-hint">도구를 누르면 설명이 펼쳐져요</p>
             </div>
             <div className="services-summary-list">
-              {uniqueServices.map(s => (
-                <div key={s.id} className="service-summary-item">
-                  <span className="service-summary-icon">{s.icon}</span>
-                  <span className="service-summary-name">{s.name}</span>
-                </div>
-              ))}
+              {uniqueServices.map(s => {
+                const isOpen = expandedServiceId === s.id;
+                const desc = SERVICE_DESCRIPTIONS[s.id];
+                const descriptions = requirementObjects
+                  .filter(ro => REQUIREMENT_TO_SERVICE[ro.requirement]?.id === s.id)
+                  .flatMap(ro => ro.descriptions || []);
+                return (
+                  <div key={s.id} className="service-summary-item-wrap">
+                    <button
+                      type="button"
+                      className={`service-summary-item ${isOpen ? 'open' : ''}`}
+                      onClick={() => setExpandedServiceId(isOpen ? null : s.id)}
+                    >
+                      <span className="service-summary-icon">{s.icon}</span>
+                      <span className="service-summary-name">{s.name}</span>
+                      <span className="service-summary-chevron">{isOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="service-summary-dropdown">
+                        {desc?.summary && (
+                          <p className="service-desc-summary">{desc.summary}</p>
+                        )}
+                        {descriptions.length > 0 && (
+                          <p className="service-desc-list">
+                            <strong>이번에 쓰는 이유:</strong> {[...new Set(descriptions)].join(', ')}
+                          </p>
+                        )}
+                        {desc?.whyNeeded && (
+                          <p className="service-desc-why">{desc.whyNeeded}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <button className="btn-start btn-start-inline" onClick={handleStart}>
-              시작하기 🚀
+            <button className="btn-start btn-start-inline" onClick={handleGuideStart}>
+              가이드 시작하기 🚀
             </button>
           </>
         )}
@@ -226,86 +261,6 @@ export default function SurveyApp() {
             ← 이전
           </button>
         )}
-      </div>
-    </div>
-  );
-}
-
-function PlanResult({ plan, onStart }) {
-  const mainTool = plan.tools[0];
-  const subTools = plan.tools.slice(1);
-
-  return (
-    <div className="result-page">
-      <header className="survey-header">
-        <div className="logo">
-          <span className="logo-icon">⚡</span>
-          <span className="logo-text">UserUse</span>
-        </div>
-      </header>
-
-      <div className="result-body">
-        <div className="result-hero">
-          <div className="result-emoji">🎯</div>
-          <h1>딱 맞는 플랜을 찾았어요!</h1>
-          <p className="result-subtitle">
-            총 <strong>{plan.steps.length}단계</strong>로 진행할게요
-          </p>
-        </div>
-
-        <div className="result-section">
-          <div className="section-label main-label">메인 툴</div>
-          <div className="tool-card main-card">
-            <div className="tool-logo">{mainTool.logo}</div>
-            <div className="tool-info">
-              <div className="tool-name">{mainTool.name}</div>
-              <div className="tool-role">{mainTool.role}</div>
-              <div className="tool-tagline">{mainTool.tagline}</div>
-            </div>
-            {mainTool.score != null && (
-              <div className="tool-score">
-                <span className="score-badge">추천 {mainTool.score}점</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {subTools.length > 0 && (
-          <div className="result-section">
-            <div className="section-label sub-label">함께 쓰면 좋아요</div>
-            <div className="sub-tools-row">
-              {subTools.map(tool => (
-                <div key={tool.id} className="tool-card sub-card">
-                  <div className="tool-logo">{tool.logo}</div>
-                  <div className="tool-info">
-                    <div className="tool-name">{tool.name}</div>
-                    <div className="tool-role">{tool.role}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="result-section">
-          <div className="section-label">진행 순서</div>
-          <div className="steps-preview">
-            {plan.steps.slice(0, 6).map((s, i) => (
-              <div key={s.stepId} className="step-preview">
-                <span className="step-num">{i + 1}</span>
-                <span className="step-tool-icon">{s.toolIcon}</span>
-                <span className="step-title">{s.title}</span>
-              </div>
-            ))}
-            {plan.steps.length > 6 && (
-              <div className="steps-more">+ {plan.steps.length - 6}단계 더...</div>
-            )}
-          </div>
-        </div>
-
-        <button className="btn-start" onClick={onStart}>
-          가이드 시작하기 🚀
-        </button>
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ class GuidanceResponse(BaseModel):
 
 # --- 설문: 사용자 답변 → AI 추천 도구 목록 (JSON) ---
 ALLOWED_REQUIREMENTS = [
-    "db", "payment", "login", "auth", "storage",
+    "db", "payment", "login", "storage",
     "frontend-hosting", "backend-hosting",
     "analytics", "email", "monitoring", "headless-cms",
 ]
@@ -78,10 +78,10 @@ SURVEY_TOOLS_SYSTEM = """# role
 
 # tools
 너가 쓸 수 있는 도구는 오직 아래와 같다.
-db, payment, login, auth, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
+db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
 
 # job
-사용자가 어떤 웹사이트 제작에 꼭 필요한 필수적인 기능들을 아래와 같은 json 형식으로 반환해야 해. 억지로 많은 도구를 사용하려고 하지마.
+사용자가 요청한 웹사이트 제작에 꼭 필요한 필수적인 기능들을 아래와 같은 json 형식으로 반환해야 해. 위 tools를 최대한 활용해서 누락되는 요구 사항이 없도록 해.
 반드시 tools 배열만 반환하고, 각 항목은 id(1부터 순번), description(한글 도구 설명), requirements(위 도구 이름 중 필요한 것만 문자열 배열)를 가진다."""
 
 SURVEY_TOOLS_JSON_SCHEMA = {
