@@ -71,6 +71,9 @@ CAPABILITIES = [
     {"id": "SSL", "category": "devops", "description": "SSL/TLS 인증서"},
     {"id": "ENV_VARS", "category": "devops", "description": "환경변수 관리"},
     
+    # Hosting
+    {"id": "WEB_HOSTING", "category": "hosting", "description": "웹호스팅"},
+    
     # Networking
     {"id": "BANDWIDTH", "category": "networking", "description": "대역폭"},
     {"id": "REQUEST_LIMIT", "category": "networking", "description": "요청 제한"},

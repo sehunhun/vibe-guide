@@ -51,6 +51,64 @@ class GuidanceResponse(BaseModel):
     steps: List[Step]
 
 
+# --- 설문: 사용자 답변 → AI 추천 도구 목록 (JSON) ---
+ALLOWED_REQUIREMENTS = [
+    "db", "payment", "login", "auth", "storage",
+    "frontend-hosting", "backend-hosting",
+    "analytics", "email", "monitoring", "headless-cms",
+]
+
+
+class SurveyToolItem(BaseModel):
+    id: int
+    description: str
+    requirements: List[str]
+
+
+class SurveyToolsRequest(BaseModel):
+    user_answer: str
+
+
+class SurveyToolsResponse(BaseModel):
+    tools: List[SurveyToolItem]
+
+
+SURVEY_TOOLS_SYSTEM = """# role
+넌 비개발자 대상 웹사이트 바이브 코딩 가이드야.
+
+# tools
+너가 쓸 수 있는 도구는 오직 아래와 같다.
+db, payment, login, auth, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
+
+# job
+사용자가 어떤 웹사이트 제작에 꼭 필요한 필수적인 기능들을 아래와 같은 json 형식으로 반환해야 해. 억지로 많은 도구를 사용하려고 하지마.
+반드시 tools 배열만 반환하고, 각 항목은 id(1부터 순번), description(한글 도구 설명), requirements(위 도구 이름 중 필요한 것만 문자열 배열)를 가진다."""
+
+SURVEY_TOOLS_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tools": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "description": {"type": "string"},
+                    "requirements": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["id", "description", "requirements"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["tools"],
+    "additionalProperties": False,
+}
+
+
 @app.get("/")
 async def root():
     return {"message": "Vibe Guide API", "status": "ok"}
@@ -148,6 +206,77 @@ async def get_guidance(request: GuidanceRequest):
         error_trace = traceback.format_exc()
         logger.error(f"서버 오류: {error_msg}\n{error_trace}")
         raise HTTPException(status_code=500, detail=f"서버 오류: {error_msg}")
+
+
+@app.post("/api/survey-tools", response_model=SurveyToolsResponse)
+async def get_survey_tools(request: SurveyToolsRequest):
+    """
+    사용자 설문 답변(어떤 웹사이트를 만들고 싶은지)을 받아
+    AI가 필수 도구 목록을 JSON으로 추천. response_format으로 구조 보장.
+    """
+    try:
+        api_key = get_openai_api_key()
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    user_content = (
+        f"사용자 답변: {request.user_answer.strip() or '알 수 없음'}\n\n"
+        "위 답변을 바탕으로 해당 웹사이트 제작에 꼭 필요한 기능만 골라서 tools 배열을 반환해."
+    )
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": SURVEY_TOOLS_SYSTEM},
+                    {"role": "user", "content": user_content},
+                ],
+                "max_tokens": 1024,
+                "temperature": 0.3,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "survey_tools",
+                        "strict": True,
+                        "schema": SURVEY_TOOLS_JSON_SCHEMA,
+                    },
+                },
+            },
+        )
+
+    if not response.is_success:
+        try:
+            err = response.json().get("error", {}).get("message", response.text)
+        except Exception:
+            err = response.text
+        raise HTTPException(status_code=response.status_code, detail=err)
+
+    data = response.json()
+    raw = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+    if not raw:
+        raise HTTPException(status_code=500, detail="AI가 빈 응답을 반환했습니다.")
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"AI 응답 JSON 파싱 실패: {e}")
+
+    tools = parsed.get("tools") or []
+    out = []
+    for t in tools:
+        reqs = [r for r in (t.get("requirements") or []) if r in ALLOWED_REQUIREMENTS]
+        out.append(SurveyToolItem(
+            id=int(t.get("id", 0)),
+            description=(t.get("description") or "").strip() or "기능",
+            requirements=reqs,
+        ))
+    return SurveyToolsResponse(tools=out)
 
 
 def parse_ai_response(raw: str) -> dict:

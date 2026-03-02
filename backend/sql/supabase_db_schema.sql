@@ -44,11 +44,16 @@ create table plan_capabilities (
   unique(plan_id, capability_id) -- 같은 플랜에서 같은 capability는 중복 불가
 );
 
---Capability 개수 계산 view
+--Capability 개수 계산 view (플랜 name, slug 포함)
 create view plan_capability_count as
 select
-  p.id as plan_id, -- 플랜 ID
-  count(pc.capability_id) as capability_count -- 해당 플랜이 제공하는 capability 개수
+  p.id as plan_id,
+  p.tool_id,
+  t.slug as tool_slug,
+  p.name as plan_name,
+  p.slug as plan_slug,
+  count(pc.capability_id) as capability_count
 from plans p
+left join tools t on t.id = p.tool_id
 left join plan_capabilities pc on p.id = pc.plan_id
-group by p.id;  
+group by p.id, p.tool_id, t.slug, p.name, p.slug;  

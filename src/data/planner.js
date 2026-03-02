@@ -1,6 +1,24 @@
 import { TOOLS, QUESTIONS, scoreTool } from './tools.js';
 
 /**
+ * 설문 requirement id → 실제 서비스 (이름, 아이콘, URL).
+ * 여러 requirement가 같은 서비스로 매핑됨 (db/storage/login → Supabase).
+ */
+export const REQUIREMENT_TO_SERVICE = {
+  db: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
+  storage: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
+  login: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
+  auth: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
+  payment: { id: 'stripe', name: 'Stripe', icon: '💳', url: 'https://stripe.com' },
+  'frontend-hosting': { id: 'vercel', name: 'Vercel', icon: '▲', url: 'https://vercel.com' },
+  'backend-hosting': { id: 'railway', name: 'Railway', icon: '🚂', url: 'https://railway.app' },
+  analytics: { id: 'ga4', name: 'GA4', icon: '📊', url: 'https://analytics.google.com' },
+  email: { id: 'resend', name: 'Resend', icon: '📧', url: 'https://resend.com' },
+  monitoring: { id: 'sentry', name: 'Sentry', icon: '🛡️', url: 'https://sentry.io' },
+  'headless-cms': { id: 'sanity', name: 'Sanity', icon: '📝', url: 'https://sanity.io' },
+};
+
+/**
  * demo: 랜딩페이지만, 진행 순서 고정 (Google AI Studio → GitHub → Vercel)
  * production: 설문 기반 툴 추천 + 동적 스텝
  */
@@ -141,6 +159,169 @@ function buildDemoPlan(answers) {
     tools: toolsWithOrder,
     steps,
     currentStepId: steps[0].stepId,
+    createdAt: Date.now(),
+    visitedUrls: {},
+  };
+}
+
+/**
+ * 선택된 AI 도구들의 requirements에서 유일한 서비스 목록 반환 (이름·아이콘·URL)
+ * @param {Array<{ id, description, requirements: string[] }>} selectedTools
+ * @returns {Array<{ id: string, name: string, icon: string, url: string }>}
+ */
+export function getUniqueServicesFromSelectedTools(selectedTools) {
+  const byId = new Map();
+  for (const tool of selectedTools || []) {
+    for (const r of tool.requirements || []) {
+      const service = REQUIREMENT_TO_SERVICE[r];
+      if (service && !byId.has(service.id)) {
+        byId.set(service.id, { ...service });
+      }
+    }
+  }
+  return Array.from(byId.values());
+}
+
+/** 도구별 연동 시 필요한 환경변수 키 예시 (시스템 프롬프트용) */
+const SERVICE_ENV_KEYS = {
+  supabase: ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'],
+  stripe: ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY'],
+  vercel: ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'],
+  railway: ['RAILWAY_TOKEN'],
+  ga4: ['NEXT_PUBLIC_GA_MEASUREMENT_ID', 'GA_MEASUREMENT_ID'],
+  resend: ['RESEND_API_KEY'],
+  sentry: ['SENTRY_DSN', 'SENTRY_AUTH_TOKEN'],
+  sanity: ['NEXT_PUBLIC_SANITY_PROJECT_ID', 'SANITY_DATASET', 'SANITY_API_TOKEN'],
+};
+
+/**
+ * 선택된 AI 도구 기준 requirement 객체 리스트 생성
+ * @param {Array<{ id, description: string, requirements: string[] }>} selectedTools
+ * @returns {Array<{ requirement: string, name: string, url: string, descriptions: string[] }>}
+ */
+export function buildRequirementObjects(selectedTools) {
+  const byReq = new Map();
+  for (const tool of selectedTools || []) {
+    const desc = (tool.description || '').trim() || '기능';
+    for (const r of tool.requirements || []) {
+      const service = REQUIREMENT_TO_SERVICE[r];
+      if (!service) continue;
+      if (!byReq.has(r)) {
+        byReq.set(r, {
+          requirement: r,
+          name: service.name,
+          url: service.url,
+          descriptions: [],
+        });
+      }
+      byReq.get(r).descriptions.push(desc);
+    }
+  }
+  return Array.from(byReq.values());
+}
+
+/**
+ * 바이브 코딩 에이전트용 시스템 프롬프트 생성
+ * - 사용자가 만들고 싶은 웹사이트와 사용할 도구 정보 전달
+ * - 도구 연동에 필요한 키는 환경변수로 사용하도록 안내
+ */
+export function buildSystemPrompt(userQuery, requirements) {
+  const lines = [
+    '당신은 비개발자를 위한 웹사이트 바이브 코딩 가이드 에이전트입니다.',
+    '',
+    '## 사용자가 만들고 싶은 웹사이트',
+    userQuery || '(미입력)',
+    '',
+    '## 사용할 도구 및 기능',
+  ];
+  for (const r of requirements || []) {
+    lines.push(`- **${r.name}** (${r.requirement}): ${r.url}`);
+    if (r.descriptions?.length) {
+      lines.push(`  - ${r.descriptions.join(', ')}`);
+    }
+  }
+  lines.push('');
+  lines.push('## 중요: 환경변수 사용');
+  lines.push('도구들과 기능을 연결하기 위해 필요한 API 키, 시크릿, URL 등은 반드시 환경변수로 관리하세요. 코드에 직접 넣지 마세요.');
+  const usedServiceIds = [...new Set((requirements || []).map(r => REQUIREMENT_TO_SERVICE[r.requirement]?.id).filter(Boolean))];
+  const envExamples = usedServiceIds.flatMap(id => SERVICE_ENV_KEYS[id] || []);
+  if (envExamples.length) {
+    lines.push(`필요한 환경변수 예: ${envExamples.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
+/**
+ * 시작하기 시 localStorage/스토리지에 저장할 설문 페이로드
+ * @param {{ siteGoal: string, selectedTools: Array<{ id, description, requirements }> }} surveyResult
+ * @returns {{ userQuery: string, requirements: object[], systemPrompt: string, tools, steps, ... }}
+ */
+export function buildSurveyPayload(surveyResult) {
+  const userQuery = (surveyResult.siteGoal || '').trim();
+  const selectedTools = surveyResult.selectedTools || [];
+  const requirements = buildRequirementObjects(selectedTools);
+  const systemPrompt = buildSystemPrompt(userQuery, requirements);
+
+  const plan = buildPlanFromSurveyTools(surveyResult);
+
+  return {
+    userQuery,
+    requirements,
+    systemPrompt,
+    ...plan,
+  };
+}
+
+/**
+ * 설문 단일 질문 플로우: siteGoal + 선택한 AI 도구 → 새 형식 플랜 생성 (기존 answers 형식 사용 안 함)
+ * @param {{ siteGoal: string, selectedTools: Array<{ id, description, requirements }> }} surveyResult
+ * @returns {object} plan - { siteGoal, tools, steps, currentStepId, createdAt, visitedUrls }
+ */
+export function buildPlanFromSurveyTools(surveyResult) {
+  const services = getUniqueServicesFromSelectedTools(surveyResult.selectedTools || []);
+  const toolsWithOrder = services.map((s, i) => ({
+    id: s.id,
+    name: s.name,
+    logo: s.icon,
+    url: s.url,
+    role: s.name,
+    order: i + 1,
+  }));
+
+  const steps = toolsWithOrder.flatMap((tool, order) => [
+    {
+      stepId: `${tool.id}_signup`,
+      toolId: tool.id,
+      toolName: tool.name,
+      toolIcon: tool.logo,
+      order: order * 2,
+      status: 'pending',
+      title: `${tool.name} 계정 만들기`,
+      desc: `${tool.name} 공식 사이트에서 계정을 생성하세요.`,
+      url: tool.url,
+      type: 'signup',
+    },
+    {
+      stepId: `${tool.id}_setup`,
+      toolId: tool.id,
+      toolName: tool.name,
+      toolIcon: tool.logo,
+      order: order * 2 + 1,
+      status: 'pending',
+      title: `${tool.name} 연결·설정하기`,
+      desc: `프로젝트에 ${tool.name}를 연결하세요.`,
+      url: tool.url,
+      type: 'start',
+    },
+  ]).sort((a, b) => a.order - b.order);
+
+  const currentStepId = steps[0]?.stepId || null;
+
+  return {
+    siteGoal: surveyResult.siteGoal || '',
+    tools: toolsWithOrder,
+    steps,
+    currentStepId,
     createdAt: Date.now(),
     visitedUrls: {},
   };

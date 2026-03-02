@@ -10,11 +10,18 @@ import demoGuide from './guides/demo-guide.md';
 
 const MAX_HTML_LEN = 30000; // 토큰 절감용
 
-/** 설문 answers를 읽기 쉬운 텍스트로 */
+/** 설문 answers를 읽기 쉬운 텍스트로 (단일 질문 플로우 + 기존 다중 질문 모두 지원) */
 function formatAnswers(answers) {
   if (!answers) return '없음';
   const lines = [];
+  if (answers.siteGoal) {
+    lines.push(`- 어떤 웹사이트: ${answers.siteGoal}`);
+    if (Array.isArray(answers.features) && answers.features.length > 0) {
+      lines.push(`- 필요한 기능: ${answers.features.join(', ')}`);
+    }
+  }
   for (const q of QUESTIONS) {
+    if (answers.siteGoal && (q.id === 'siteType' || q.id === 'skill' || q.id === 'bizType' || q.id === 'teamType' || q.id === 'budget')) continue;
     const val = answers[q.id];
     if (val == null) continue;
     const label = q.type === 'multi'
@@ -151,6 +158,26 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
 const BACKEND_URL = 'https://vibe-guide-production.up.railway.app';
 
 /**
+ * 설문: 사용자 답변 → AI 추천 도구 목록 (체크박스용)
+ * @param {string} backendUrl
+ * @param {string} userAnswer - "어떤 웹사이트를 만들고 싶으신가요?" 답변
+ * @returns {Promise<{ tools: Array<{ id: number, description: string, requirements: string[] }> }>}
+ */
+export async function getSurveyTools(backendUrl, userAnswer) {
+  const baseUrl = (backendUrl || BACKEND_URL).trim().replace(/\/$/, '');
+  const res = await fetch(`${baseUrl}/api/survey-tools`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_answer: userAnswer }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`설문 API 오류 (${res.status}): ${err}`);
+  }
+  return res.json();
+}
+
+/**
  * 저장된 AI 설정 조회 (background에서 호출)
  */
 export function getStoredAISettings() {
@@ -179,7 +206,7 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
   const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content': 'application/json',
     },
     body: JSON.stringify({
       system: messages.system,

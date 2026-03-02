@@ -107,6 +107,70 @@ body {
   font-weight: 500;
 }
 
+/* ===== 설문 텍스트 입력 ===== */
+.survey-text-wrap { margin-bottom: 20px; }
+.survey-textarea {
+  width: 100%;
+  padding: 16px 18px;
+  font-size: 15px;
+  line-height: 1.5;
+  border: 2px solid #e8e3ff;
+  border-radius: 14px;
+  background: #fff;
+  color: #1a1a2e;
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.survey-textarea::placeholder { color: #9ca3af; }
+.survey-textarea:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+.survey-textarea:disabled { opacity: 0.7; cursor: not-allowed; }
+.survey-error {
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border-radius: 8px;
+}
+
+/* ===== 서비스 요약 (step 2) ===== */
+.services-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.service-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #fff;
+  border: 2px solid #e8e3ff;
+  border-radius: 14px;
+}
+.service-summary-icon { font-size: 24px; }
+.service-summary-name { font-size: 16px; font-weight: 600; color: #1a1a2e; }
+.btn-start-inline {
+  width: 100%;
+  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-start-inline:hover { opacity: 0.92; transform: translateY(-1px); }
+
 /* ===== 옵션 카드 ===== */
 .options-grid {
   display: flex;
