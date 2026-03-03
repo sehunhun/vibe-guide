@@ -180,6 +180,87 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
   return { system, user: userParts.join('\n') };
 }
 
+/**
+ * 채팅용 시스템 + 유저 프롬프트 생성
+ * - 같은 컨텍스트(설문 요약, 프로젝트 플랜, 현재 페이지 URL, 이전 단계)를 사용하되
+ * - 웹페이지 내부 요소/용어를 비개발자도 이해하기 쉽게 설명하는 역할에 맞게 구성
+ * - Chat 탭은 HTML/이미지 컨텍스트를 사용하지 않고, URL/플랜/단계 정보 + 대화 히스토리만 활용
+ * @param {{ plan: object, answers: object, previousStepsForUrl?: { steps: Array<{text,selector?}>, completed: boolean[] } }} context
+ * @param {string} pageUrl
+ * @param {string|null} domainGuide
+ * @param {Array<{ role: 'user'|'assistant', text: string }>} history
+ * @param {string} userMessage
+ */
+export function buildChatPrompt(
+  context,
+  pageUrl,
+  domainGuide = null,
+  history = [],
+  userMessage = '',
+) {
+  const { plan, answers, previousStepsForUrl } = context;
+  const answersText = formatSurveySummary(plan, answers);
+  const planText = formatPlan(plan);
+
+  const system = [
+    '# role',
+    '당신은 웹페이지 내부 요소 및 용어에 대해 설명하는 어시스턴트입니다.',
+    '비개발자도 충분히 이해할 수 있도록 쉬운 용어와 표현으로 대답합니다.',
+    '',
+    '# style',
+    '- 가능한 한 쉬운 한국어를 사용하세요.',
+    '- 개발 용어가 나오면 일상적인 비유와 함께 풀어서 설명하세요.',
+    '- 버튼, 메뉴, 입력칸 이름을 그대로 언급하되, 그게 무슨 역할을 하는지 같이 설명하세요.',
+  ].join('\n');
+
+  const userParts = [
+    '## 설문 요약',
+    answersText,
+    '## 프로젝트 플랜',
+    planText,
+    '## 현재 페이지 URL',
+    pageUrl,
+  ];
+
+  if (domainGuide) {
+    userParts.push(
+      '## 도메인 가이드 문서',
+      `다음은 현재 도메인(${pageUrl})에 대한 공식 가이드 문서입니다. 화면을 설명할 때 참고만 하세요.`,
+      '',
+      domainGuide,
+    );
+  }
+
+  if (previousStepsForUrl?.steps?.length) {
+    const completed = previousStepsForUrl.completed || [];
+    const lines = previousStepsForUrl.steps.map((s, i) => {
+      const status = completed[i] ? '(완료)' : '(미완료)';
+      return `${i + 1}) ${s.text} ${status}`;
+    });
+    userParts.push('## 이 페이지에 대해 지금까지 안내된 단계', lines.join('\n'));
+  }
+
+  if (Array.isArray(history) && history.length > 0) {
+    const lines = history.map((m, idx) => {
+      const role = m.role === 'assistant' ? '어시스턴트' : '사용자';
+      return `${idx + 1}. [${role}] ${m.text}`;
+    });
+    userParts.push('## 지금까지의 대화 내용', lines.join('\n'));
+  }
+
+  userParts.push(
+    '## 사용자의 현재 질문',
+    userMessage || '(질문 없음)',
+    '',
+    '**답변 지침**',
+    '- 개발 용어를 최대한 풀어서 설명하고, 필요한 경우 예시를 들어주세요.',
+    '- 단계 지시(예: 어디를 클릭하세요) 보다는, 화면에 보이는 요소가 무슨 역할을 하는지 중심으로 설명해주세요.',
+    '- 너무 길게 설명하기보다는, 중요한 포인트를 중심으로 짧고 명확하게 답변하세요.',
+  );
+
+  return { system, user: userParts.join('\n') };
+}
+
 // 백엔드 서버 URL (하드코딩)
 const BACKEND_URL = 'https://vibe-guide-production.up.railway.app';
 
@@ -269,6 +350,41 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
     console.log('[vibe-guide] API 응답 단계:', steps.length, '개, 종류:', kind, steps.map((s) => ({ backendDOMNodeId: s.backendDOMNodeId, selector: s.selector ?? null })));
   }
   return { steps };
+}
+
+/**
+ * 채팅용 백엔드 API 호출
+ * @param {string} backendUrl
+ * @param {string} modelId
+ * @param {{ system: string, user: string }} messages
+ */
+async function callChatBackend(backendUrl, modelId, messages) {
+  if (!backendUrl || !backendUrl.trim()) {
+    throw new Error('백엔드 서버 URL을 설정해주세요.');
+  }
+
+  const baseUrl = backendUrl.trim().replace(/\/$/, '');
+  const apiUrl = `${baseUrl}/api/chat`;
+
+  const body = {
+    system: messages.system,
+    user: messages.user,
+    model: modelId,
+  };
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`채팅 API 오류 (${res.status}): ${err}`);
+  }
+
+  const data = await res.json();
+  return { text: data.text || '' };
 }
 
 /** 파싱 실패 시 반환하는 고정 메시지 (재시도 판별용) */
@@ -378,4 +494,29 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
   }
 
   return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
+}
+
+/**
+ * 채팅용 AI 호출 (background에서 사용)
+ * - Chat 탭은 HTML/이미지 컨텍스트를 사용하지 않고, URL/플랜/단계 정보 + 대화 히스토리만 활용
+ * @param {{ plan: object, answers: object, previousStepsForUrl?: { steps: Array<{text,selector?}>, completed: boolean[] } }} context
+ * @param {string} pageUrl
+ * @param {Array<{ role: 'user'|'assistant', text: string }>} history
+ * @param {string} userMessage
+ * @returns {Promise<{ text: string }>}
+ */
+export async function getPageChatAnswer(context, pageUrl, history = [], userMessage = '') {
+  const { modelId, backendUrl } = await getStoredAISettings();
+
+  if (!backendUrl || !backendUrl.trim()) {
+    throw new Error('설정에서 백엔드 서버 URL을 입력해주세요.');
+  }
+
+  const domainId = getDomainIdFromUrl(pageUrl);
+  const domainGuide = domainId ? await getDomainGuide(domainId) : null;
+
+  const messages = buildChatPrompt(context, pageUrl, domainGuide, history, userMessage);
+
+  const result = await callChatBackend(backendUrl, modelId, messages);
+  return result;
 }

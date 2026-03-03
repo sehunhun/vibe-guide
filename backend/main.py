@@ -55,6 +55,20 @@ class GuidanceResponse(BaseModel):
     steps: List[Step]
 
 
+# --- 자유 대화용 모델 ---
+
+class ChatRequest(BaseModel):
+    system: str
+    user: str
+    model: str = "gpt-4o-mini"
+    # 선택적으로 페이지 컨텍스트를 함께 보낼 수 있지만,
+    # 현재 구현에서는 프롬프트 문자열에 이미 포함된다고 가정한다.
+
+
+class ChatResponse(BaseModel):
+    text: str
+
+
 # --- 설문: 사용자 답변 → AI 추천 도구 목록 (JSON) ---
 ALLOWED_REQUIREMENTS = [
     "db", "payment", "login", "storage",
@@ -275,6 +289,89 @@ async def get_guidance(request: GuidanceRequest):
         error_msg = str(e) if str(e) else type(e).__name__
         error_trace = traceback.format_exc()
         logger.error(f"서버 오류: {error_msg}\n{error_trace}")
+        raise HTTPException(status_code=500, detail=f"서버 오류: {error_msg}")
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    일반 자연어 채팅용 API
+    - 시스템 프롬프트와 유저 프롬프트를 그대로 OpenAI에 전달하고
+    - 모델이 생성한 텍스트 전체를 그대로 반환한다.
+    """
+    import traceback
+
+    try:
+        logger.info(f"[chat] 요청 받음: model={request.model}")
+
+        try:
+            api_key = get_openai_api_key()
+            logger.info("[chat] OpenAI API 키 확인 완료")
+        except ValueError as e:
+            logger.error(f"[chat] 환경변수 오류: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"환경변수 오류: {str(e)}")
+
+        payload = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": request.system},
+                {"role": "user", "content": request.user},
+            ],
+            "max_tokens": 2048,
+        }
+
+        logger.info("[chat] OpenAI API 호출 시작")
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                },
+                json=payload,
+            )
+
+        logger.info(f"[chat] OpenAI API 응답 상태: {response.status_code}")
+
+        if not response.is_success:
+            try:
+                error_data = response.json()
+                error_text = error_data.get("error", {}).get("message", response.text)
+            except Exception:
+                error_text = response.text
+            logger.error(f"[chat] OpenAI API 오류: {error_text}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"OpenAI API 오류 ({response.status_code}): {error_text}",
+            )
+
+        data = response.json()
+        text = (
+            data.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+
+        if not text:
+            logger.error("[chat] OpenAI API가 빈 응답을 반환했습니다.")
+            raise HTTPException(status_code=500, detail="OpenAI API가 빈 응답을 반환했습니다.")
+
+        logger.info(f"[chat] 응답 길이: {len(text)}")
+        return ChatResponse(text=text)
+
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        logger.error("[chat] OpenAI API 호출 시간 초과")
+        raise HTTPException(status_code=504, detail="OpenAI API 호출 시간 초과")
+    except httpx.RequestError as e:
+        logger.error(f"[chat] OpenAI API 요청 실패: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"OpenAI API 요청 실패: {str(e)}")
+    except Exception as e:
+        error_msg = str(e) if str(e) else type(e).__name__
+        error_trace = traceback.format_exc()
+        logger.error(f"[chat] 서버 오류: {error_msg}\n{error_trace}")
         raise HTTPException(status_code=500, detail=f"서버 오류: {error_msg}")
 
 

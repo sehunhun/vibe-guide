@@ -34,7 +34,8 @@ export default function Survey({ onComplete }) {
         return;
       }
       setAiTools(tools);
-      setSelectedToolIds(new Set(tools.map(t => t.id)));
+      // 기본값으로 모두 선택하지 않고, 사용자가 직접 선택하도록 비워둠
+      setSelectedToolIds(new Set());
       setStep(1);
     } catch (e) {
       setError(e.message || '도구 추천을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');

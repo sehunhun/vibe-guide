@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Survey from './Survey.jsx';
 import Guide from './Guide.jsx';
+import Chat from './Chat.jsx';
 import Settings from './Settings.jsx';
 import { storage } from '../data/planner.js';
 import { hasValidApiKey } from '../data/ai.js';
@@ -10,6 +11,7 @@ export default function App() {
   const [screen, setScreen] = useState(null); // null = 로딩중
   const [plan, setPlan] = useState(null);
   const [currentTab, setCurrentTab] = useState(null);
+  const [activeTab, setActiveTab] = useState('plan'); // 'plan' | 'chat'
   // 가이드 진입 시 API 키 유효 여부 (null=미확인, true/false)
   const [apiKeyValid, setApiKeyValid] = useState(null);
 
@@ -24,6 +26,30 @@ export default function App() {
         chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' });
       }
     });
+  }, []);
+
+  // 다른 탭(설문/가이드 페이지)에서 plan이 저장·삭제되었을 때 사이드패널 화면 자동 전환
+  useEffect(() => {
+    if (!chrome?.storage?.onChanged) return;
+
+    const handleStorageChange = (changes, areaName) => {
+      if (areaName !== 'local') return;
+      if (!changes.plan) return;
+
+      const nextPlan = changes.plan.newValue || null;
+      setPlan(nextPlan);
+
+      if (nextPlan) {
+        // 새 플랜이 생기면 자동으로 가이드 화면으로 전환
+        setScreen('guide');
+      } else {
+        // 플랜이 삭제되면 다시 설문 대기 화면으로 전환
+        setScreen('awaiting_survey');
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, []);
 
   // 가이드 화면일 때 API 키 확인 (설정에서 돌아왔을 때도 재확인)
@@ -138,13 +164,38 @@ export default function App() {
           </div>
         )}
         {screen === 'guide' && apiKeyValid === true && (
-          <Guide
-            plan={plan}
-            currentTab={currentTab}
-            onPlanUpdate={handlePlanUpdate}
-            onReset={handleReset}
-            onSettings={() => setScreen('settings')}
-          />
+          <>
+            <div className="guide-tabs">
+              <button
+                type="button"
+                className={`guide-tab-btn ${activeTab === 'plan' ? 'active' : ''}`}
+                onClick={() => setActiveTab('plan')}
+              >
+                진행 플랜
+              </button>
+              <button
+                type="button"
+                className={`guide-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
+                onClick={() => setActiveTab('chat')}
+              >
+                채팅
+              </button>
+            </div>
+            {activeTab === 'plan' ? (
+              <Guide
+                plan={plan}
+                currentTab={currentTab}
+                onPlanUpdate={handlePlanUpdate}
+                onReset={handleReset}
+                onSettings={() => setScreen('settings')}
+              />
+            ) : (
+              <Chat
+                plan={plan}
+                currentTab={currentTab}
+              />
+            )}
+          </>
         )}
         {screen === 'settings' && (
           <Settings onBack={() => setScreen('guide')} />

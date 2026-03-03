@@ -57,7 +57,7 @@ export const SERVICE_DESCRIPTIONS = {
  * demo: 랜딩페이지만, 진행 순서 고정 (Google AI Studio → GitHub → Vercel)
  * production: 설문 기반 툴 추천 + 동적 스텝
  */
-export const PLAN_MODE = 'demo'; // 'demo' | 'production'
+export const PLAN_MODE = 'production'; // 'demo' | 'production'
 
 /**
  * 설문 응답을 받아 툴 플랜을 생성한다.

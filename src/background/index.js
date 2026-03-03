@@ -7,7 +7,7 @@
  * - SPOTLIGHT: selector( content script ) 또는 backendDOMNodeId( CDP DOM.highlightNode )
  */
 
-import { getPageGuidance } from '../data/ai.js';
+import { getPageGuidance, getPageChatAnswer } from '../data/ai.js';
 import { filterAndSlim } from '../data/axtree.js';
 
 const DEBUGGER_VERSION = '1.3';
@@ -198,6 +198,67 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return result;
       } catch (e) {
         return { error: e.message || '안내를 불러오는 데 실패했습니다.' };
+      }
+    })().then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'GET_PAGE_CHAT_ANSWER') {
+    (async () => {
+      try {
+        const { tabId, history, userMessage } = msg;
+        const storage = await chrome.storage.local.get(['plan', 'answers', 'pageGuidanceCache', 'pageStepCompletions']);
+        const plan = storage.plan || null;
+        const answers = storage.answers || null;
+        if (!plan) {
+          return { error: '진행 플랜이 없습니다. 먼저 설문을 완료해주세요.' };
+        }
+
+        const tab = await chrome.tabs.get(tabId);
+        const url = tab?.url || '';
+        if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
+          return { error: '이 페이지에서는 채팅을 사용할 수 없습니다. 일반 웹페이지에서 시도해주세요.' };
+        }
+
+        const cache = storage.pageGuidanceCache || {};
+        const completions = storage.pageStepCompletions || {};
+
+        const currentDomain = getDomainFromUrl(url);
+        const allPreviousSteps = [];
+        const allCompleted = [];
+
+        if (currentDomain) {
+          for (const [cachedUrl, guidance] of Object.entries(cache)) {
+            if (guidance?.steps?.length && isSameDomain(cachedUrl, url)) {
+              const urlCompletions = completions[cachedUrl] || [];
+              guidance.steps.forEach((step, idx) => {
+                allPreviousSteps.push(step);
+                allCompleted.push(urlCompletions[idx] === true);
+              });
+            }
+          }
+        } else if (cache[url]?.steps?.length) {
+          allPreviousSteps.push(...cache[url].steps);
+          const urlCompletions = completions[url] || [];
+          cache[url].steps.forEach((_, idx) => {
+            allCompleted.push(urlCompletions[idx] === true);
+          });
+        }
+
+        const previousStepsForUrl = allPreviousSteps.length > 0
+          ? { steps: allPreviousSteps, completed: allCompleted }
+          : undefined;
+
+        const result = await getPageChatAnswer(
+          { plan, answers, previousStepsForUrl },
+          url,
+          Array.isArray(history) ? history : [],
+          userMessage || '',
+        );
+
+        return { text: result.text };
+      } catch (e) {
+        return { error: e.message || '메시지를 불러오는 데 실패했습니다.' };
       }
     })().then(sendResponse);
     return true;
