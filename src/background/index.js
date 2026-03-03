@@ -78,25 +78,31 @@ async function getAxtreeSlim(tabId) {
     throw new Error('이 페이지에서는 안내를 받을 수 없습니다. 일반 웹페이지에서 시도해주세요.');
   }
   return new Promise((resolve, reject) => {
+    const detach = () => chrome.debugger.detach({ tabId }, () => {});
+
     chrome.debugger.attach({ tabId }, DEBUGGER_VERSION, (err) => {
       if (err) {
         reject(new Error('페이지 분석 권한이 필요합니다. 확장 프로그램 디버거 권한을 허용해주세요.'));
         return;
       }
-      chrome.debugger.sendCommand({ tabId }, 'Accessibility.getFullAXTree', {}, (cmdErr, result) => {
-        const detach = () => {
-          chrome.debugger.detach({ tabId }, () => {});
-        };
-        if (cmdErr) {
-          detach();
-          reject(new Error(cmdErr.message || '접근성 트리를 가져오지 못했습니다.'));
-          return;
+      // CDP: chrome.debugger.sendCommand 콜백은 성공 시 (result) 한 개만 인자로 받음. 에러는 chrome.runtime.lastError.
+      chrome.debugger.sendCommand({ tabId }, 'Accessibility.enable', {}, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[vibe-guide] Accessibility.enable 실패 (무시하고 진행):', chrome.runtime.lastError?.message);
         }
-        const nodes = result?.nodes ?? [];
-        const slim = filterAndSlim(nodes);
-        console.log('[vibe-guide] 접근성 트리 수집 완료', { tabId, url: tab.url, totalNodes: nodes.length, slimCount: slim.length });
-        detach();
-        resolve({ type: 'axtree', nodes: slim, url: tab.url });
+        chrome.debugger.sendCommand({ tabId }, 'Accessibility.getFullAXTree', {}, (result) => {
+          if (chrome.runtime.lastError) {
+            console.error('[vibe-guide] Accessibility.getFullAXTree 실패:', chrome.runtime.lastError?.message);
+            detach();
+            reject(new Error(chrome.runtime.lastError.message || '접근성 트리를 가져오지 못했습니다.'));
+            return;
+          }
+          const nodes = result?.nodes ?? [];
+          const slim = filterAndSlim(nodes);
+          console.log('[vibe-guide] 접근성 트리 수집 완료', { tabId, url: tab.url, totalNodes: nodes.length, slimCount: slim.length });
+          detach();
+          resolve({ type: 'axtree', nodes: slim, url: tab.url });
+        });
       });
     });
   });
@@ -146,7 +152,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         let pageContext;
         try {
           pageContext = await getAxtreeSlim(tabId);
-        } catch (_) {
+          console.log('[vibe-guide] GET_PAGE_GUIDANCE: axtree 사용 → 단계에 backendDOMNodeId 포함됨');
+        } catch (e) {
+          const msg = e?.message ?? String(e);
+          const stack = e?.stack ? `\n${e.stack}` : '';
+          console.warn('[vibe-guide] GET_PAGE_GUIDANCE: axtree 실패 → HTML/이미지 폴백 (단계에 selector만 포함됨). 사유:', msg, stack);
           pageContext = await getPageContext(tabId);
         }
         const cache = storage.pageGuidanceCache || {};
@@ -195,31 +205,56 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'SPOTLIGHT_ELEMENT') {
     const { tabId, selector, backendDOMNodeId } = msg;
-    if (backendDOMNodeId != null && typeof backendDOMNodeId === 'number') {
+    const backendId = backendDOMNodeId != null ? Number(backendDOMNodeId) : NaN;
+    if (Number.isFinite(backendId)) {
+      console.log('[vibe-guide] 스포트라이트 분기: backendDOMNodeId 있음 → CDP wrap, SPOTLIGHT_WRAP_DONE', { backendId, tabId });
       chrome.debugger.attach({ tabId }, DEBUGGER_VERSION, (err) => {
         if (err) {
           sendResponse({ ok: false, error: err.message || '스포트라이트를 사용할 수 없습니다.' });
           return;
         }
-        chrome.debugger.sendCommand({ tabId }, 'DOM.highlightNode', {
-          backendNodeId: backendDOMNodeId,
-          highlightConfig: {
-            contentColor: { r: 124, g: 111, b: 247, a: 0.3 },
-            borderColor: { r: 124, g: 111, b: 247, a: 1 },
-          },
-        }, () => {});
-        const hideAndDetach = () => {
-          chrome.debugger.sendCommand({ tabId }, 'DOM.hideHighlight', {}, () => {});
-          chrome.debugger.detach({ tabId }, () => {});
-        };
-        setTimeout(hideAndDetach, 4000);
-        sendResponse({ ok: true });
+        const detach = () => chrome.debugger.detach({ tabId }, () => {});
+        chrome.debugger.sendCommand({ tabId }, 'DOM.scrollIntoViewIfNeeded', { backendNodeId: backendId }, () => {
+          if (chrome.runtime.lastError) {
+            detach();
+            sendResponse({ ok: false, error: chrome.runtime.lastError.message || '스크롤 실패' });
+            return;
+          }
+          chrome.debugger.sendCommand({ tabId }, 'DOM.resolveNode', { backendNodeId: backendId }, (resolveResult) => {
+            if (chrome.runtime.lastError || !resolveResult?.object?.objectId) {
+              detach();
+              sendResponse({ ok: false, error: chrome.runtime.lastError?.message || '요소를 찾을 수 없습니다.' });
+              return;
+            }
+            const objectId = resolveResult.object.objectId;
+            const wrapFn = 'function() { var w = document.createElement("div"); w.id = "vibe-guide-spotlight-wrapper"; w.style.cssText = "display:" + getComputedStyle(this).display + ";overflow:visible;pointer-events:none;position:relative;z-index:2147483646;border:3px solid #7c6ff7;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,0.35);"; this.parentNode.insertBefore(w, this); w.appendChild(this); return true; }';
+            chrome.debugger.sendCommand({ tabId }, 'Runtime.callFunctionOn', {
+              objectId,
+              functionDeclaration: wrapFn,
+            }, () => {
+              detach();
+              if (chrome.runtime.lastError) {
+                sendResponse({ ok: false, error: chrome.runtime.lastError.message || '요소를 감싸지 못했습니다.' });
+                return;
+              }
+              chrome.tabs.sendMessage(tabId, { type: 'SPOTLIGHT_WRAP_DONE' }, (response) => {
+                if (chrome.runtime.lastError) {
+                  sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+                } else {
+                  sendResponse(response ?? { ok: true });
+                }
+              });
+            });
+          });
+        });
       });
     } else if (selector) {
+      console.log('[vibe-guide] 스포트라이트 분기: backendDOMNodeId 없음 → selector로 Content에 SPOTLIGHT_ELEMENT', { selector: selector.slice(0, 60), tabId });
       chrome.tabs.sendMessage(tabId, { type: 'SPOTLIGHT_ELEMENT', selector })
         .then(res => sendResponse(res ?? { ok: false }))
         .catch(() => sendResponse({ ok: false, error: '페이지와 통신할 수 없습니다.' }));
     } else {
+      console.log('[vibe-guide] 스포트라이트 분기: selector/backendDOMNodeId 둘 다 없음');
       sendResponse({ ok: false, error: 'selector 또는 backendDOMNodeId가 필요합니다.' });
     }
     return true;

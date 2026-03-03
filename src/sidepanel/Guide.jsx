@@ -486,7 +486,8 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     if (!currentTab?.tabId) return;
     const selector = step?.selector ?? null;
     const backendDOMNodeId = step?.backendDOMNodeId ?? null;
-    if (!selector && (backendDOMNodeId == null || typeof backendDOMNodeId !== 'number')) return;
+    const hasBackendId = backendDOMNodeId != null && Number.isFinite(Number(backendDOMNodeId));
+    if (!selector && !hasBackendId) return;
     chrome.runtime.sendMessage(
       { type: 'SPOTLIGHT_ELEMENT', tabId: currentTab.tabId, selector, backendDOMNodeId },
       () => {},
@@ -830,7 +831,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                     </div>
                     {!isCompletionMessage && (
                       <div className="page-guidance-step-actions">
-                        {(step.selector || (step.backendDOMNodeId != null && typeof step.backendDOMNodeId === 'number')) && (
+                        {(step.selector || (step.backendDOMNodeId != null && Number.isFinite(Number(step.backendDOMNodeId)))) && (
                           <button
                             type="button"
                             className="btn-spotlight"

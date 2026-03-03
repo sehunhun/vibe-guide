@@ -264,6 +264,10 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
     selector: s.selector ?? null,
     backendDOMNodeId: s.backendDOMNodeId ?? null,
   }));
+  if (steps.length) {
+    const kind = steps.some((s) => s.backendDOMNodeId != null) ? 'backendDOMNodeId' : 'selector';
+    console.log('[vibe-guide] API 응답 단계:', steps.length, '개, 종류:', kind, steps.map((s) => ({ backendDOMNodeId: s.backendDOMNodeId, selector: s.selector ?? null })));
+  }
   return { steps };
 }
 
