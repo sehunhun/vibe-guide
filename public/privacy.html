@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UserUse – Privacy Policy</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      background: #f8f7ff;
+      color: #1a1a2e;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .support-page {
+      max-width: 680px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding-bottom: 48px;
+    }
+
+    .support-header {
+      display: flex;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid #ede9fe;
+      background: #fff;
+    }
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      color: #7c3aed;
+      letter-spacing: -0.3px;
+    }
+    .support-header a {
+      color: #7c3aed;
+      font-weight: 600;
+      text-decoration: none;
+      margin-left: auto;
+      font-size: 14px;
+    }
+    .support-header a:hover { text-decoration: underline; }
+
+    .support-body { padding: 32px 24px 16px; }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 12px;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin: 28px 0 12px;
+      padding-bottom: 6px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    p {
+      font-size: 15px;
+      color: #4b5563;
+      margin-bottom: 12px;
+    }
+    p:last-child { margin-bottom: 0; }
+    .lead {
+      font-size: 16px;
+      color: #374151;
+      margin-bottom: 16px;
+    }
+    .lead strong { color: #1a1a2e; }
+
+    ul {
+      margin: 0 0 16px;
+      padding-left: 20px;
+      font-size: 15px;
+      color: #4b5563;
+    }
+    li { margin-bottom: 6px; }
+    li strong { color: #1a1a2e; }
+
+    .card {
+      background: #fff;
+      border: 2px solid #e8e3ff;
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    .card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #7c3aed;
+      margin-bottom: 8px;
+    }
+    .card p { margin-bottom: 8px; }
+    .card p:last-child { margin-bottom: 0; }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+
+    .contact-box {
+      background: linear-gradient(135deg, #faf8ff 0%, #f0ebff 100%);
+      border: 2px solid #e8e3ff;
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-top: 32px;
+    }
+    .contact-box .section-label { color: #7c3aed; }
+    .contact-box a {
+      color: #7c3aed;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .contact-box a:hover { text-decoration: underline; }
+
+    .last-updated { font-size: 14px; color: #9ca3af; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+  <div class="support-page">
+    <header class="support-header">
+      <span class="logo-text">UserUse</span>
+      <a href="/">About &amp; Support</a>
+    </header>
+
+    <main class="support-body">
+      <h1>Privacy Policy</h1>
+      <p class="last-updated">Last updated: March 2025</p>
+      <p class="lead">
+        This privacy policy describes how the <strong>UserUse</strong> Chrome extension (“the extension,” “we,” “our”) collects, uses, and shares user data. We comply with the <a href="https://developer.chrome.com/docs/webstore/program-policies/privacy/" target="_blank" rel="noopener">Chrome Web Store Program Policies</a> and do not use your data for purposes unrelated to the extension’s dedicated purpose.
+      </p>
+
+      <h2>1. Data we collect and how we use it</h2>
+
+      <div class="card">
+        <h3>Data stored only on your device (not sent to us)</h3>
+        <ul style="margin-bottom: 0;">
+          <li><strong>Survey answers and plan:</strong> Your goal description, chosen tools, and the generated plan are stored locally in the extension (Chrome’s local storage).</li>
+          <li><strong>Step progress:</strong> Which steps you’ve marked as done are stored locally so you can continue later.</li>
+          <li><strong>Chat history:</strong> Your chat messages and the extension’s replies are stored locally in the extension.</li>
+          <li><strong>Settings:</strong> Any extension settings (e.g. backend URL, model preference) are stored locally.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>Data sent to our backend (when you use AI features)</h3>
+        <p>When you use tool recommendations, step-by-step guidance, or the in-extension chat, the extension sends the following to our backend API to generate responses:</p>
+        <ul>
+          <li><strong>Tool recommendations:</strong> Your goal description (e.g. “landing page for my product”) and language preference.</li>
+          <li><strong>Step guidance:</strong> Your plan, the current page URL, and a structured representation of the current page (e.g. accessibility tree or similar page structure) so we can suggest relevant “what to do on this page” steps and, where applicable, which element to highlight.</li>
+          <li><strong>Chat:</strong> Your chat message plus context we need to answer (e.g. your plan, current page URL). We do not use this for advertising, profiling, or selling to third parties.</li>
+        </ul>
+        <p>We use this data solely to provide the extension’s functionality: recommending tools, generating steps, and answering your questions. We do not use it for advertising, credit assessment, or loans.</p>
+      </div>
+
+      <h2>2. Who we share data with</h2>
+      <p>User data is sent only to <strong>our own backend service</strong> (hosted by us or our infrastructure provider, e.g. Vercel) to run the APIs that power tool recommendations, step generation, and chat. Responses may be generated using third-party AI services (e.g. language models) that process the data under our instructions; we do not allow those providers to use your data for their own advertising or training unrelated to serving the extension.</p>
+      <p>We <strong>do not sell</strong> user data. We <strong>do not share</strong> user data with third parties for advertising, marketing, or credit/loan purposes. We share data only as needed to operate the extension (e.g. with our hosting and AI API providers under data processing terms).</p>
+
+      <h2>3. Data we do not collect</h2>
+      <p>We do not collect: name, email, address, payment or financial information, passwords, health information, precise location, or a history of websites you visit. We do not do click logging, keystroke logging, or general “user activity” tracking beyond what is needed to show the right guidance on the current page.</p>
+
+      <h2>4. Your choices</h2>
+      <p>You can stop sending data to our backend by not using the AI-powered features (tool recommendations, step generation, chat). Local data (plan, progress, chat history, settings) stays on your device until you remove the extension or clear extension data. You can remove the extension at any time from Chrome to stop all data collection and delete local data.</p>
+
+      <h2>5. Updates to this policy</h2>
+      <p>We may update this privacy policy from time to time. The “Last updated” date at the top will be revised when we do. Continued use of the extension after changes means you accept the updated policy. For material changes, we will aim to notify users (e.g. via the extension or the support page).</p>
+
+      <h2>6. Contact</h2>
+      <div class="contact-box">
+        <div class="section-label">Contact</div>
+        <p style="margin-bottom: 0;">Questions about this privacy policy or your data: <a href="mailto:tpngs10120@gmail.com">tpngs10120@gmail.com</a></p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
