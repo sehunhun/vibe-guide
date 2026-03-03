@@ -5,6 +5,8 @@
 
   "tabPlan": { "message": "Plan" },
   "tabChat": { "message": "Chat" },
+  "resetPlanButton": { "message": "Reset from start" },
+  "resetPlanButtonLong": { "message": "Reset from start" },
   "appSettings": { "message": "Settings" },
   "awaitingSurveyText": { "message": "Please complete the survey in the new tab." },
   "awaitingSurveyHint": { "message": "After clicking Start guide, you can open the extension icon to view the guide here." },
@@ -84,5 +86,9 @@
   "errorChatPage": { "message": "Chat is not available on this page. Try a normal webpage." },
   "errorElementNotFound": { "message": "Element not found." },
   "errorBackendUrl": { "message": "Please set the backend server URL in settings." },
-  "parseFailureMessage": { "message": "Could not generate guidance. Please try again." }
+  "parseFailureMessage": { "message": "Could not generate guidance. Please try again." },
+
+  "aiStudioStep1": { "message": "Copy the website idea prompt from the survey and paste it into the top input." },
+  "aiStudioStep2": { "message": "Click the Build button to the right of the input to generate the first version of the app." },
+  "aiStudioStep3": { "message": "Enter what you want to change in the chat on the right, then use the Annotate app button to modify specific parts." }
 }

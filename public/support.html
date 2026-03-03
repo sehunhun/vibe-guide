@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UserUse – About &amp; Support</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      background: #f8f7ff;
+      color: #1a1a2e;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .support-page {
+      max-width: 680px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding-bottom: 48px;
+    }
+
+    /* Header – same tone as survey */
+    .support-header {
+      display: flex;
+      align-items: center;
+      padding: 20px 24px;
+      border-bottom: 1px solid #ede9fe;
+      background: #fff;
+    }
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      color: #7c3aed;
+      letter-spacing: -0.3px;
+    }
+
+    .support-body { padding: 32px 24px 16px; }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 12px;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin: 28px 0 12px;
+      padding-bottom: 6px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    p {
+      font-size: 15px;
+      color: #4b5563;
+      margin-bottom: 12px;
+    }
+    p:last-child { margin-bottom: 0; }
+    .lead {
+      font-size: 16px;
+      color: #374151;
+      margin-bottom: 16px;
+    }
+    .lead strong { color: #1a1a2e; }
+
+    ul {
+      margin: 0 0 16px;
+      padding-left: 20px;
+      font-size: 15px;
+      color: #4b5563;
+    }
+    li { margin-bottom: 6px; }
+    li strong { color: #1a1a2e; }
+
+    .card {
+      background: #fff;
+      border: 2px solid #e8e3ff;
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    .card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #7c3aed;
+      margin-bottom: 8px;
+    }
+    .card p { margin-bottom: 8px; }
+    .card p:last-child { margin-bottom: 0; }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+
+    .contact-box {
+      background: linear-gradient(135deg, #faf8ff 0%, #f0ebff 100%);
+      border: 2px solid #e8e3ff;
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-top: 32px;
+    }
+    .contact-box .section-label { color: #7c3aed; }
+    .contact-box a {
+      color: #7c3aed;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .contact-box a:hover { text-decoration: underline; }
+
+    .summary-list {
+      list-style: none;
+      padding-left: 0;
+    }
+    .summary-list li {
+      position: relative;
+      padding-left: 18px;
+      margin-bottom: 8px;
+    }
+    .summary-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #7c3aed;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="support-page">
+    <header class="support-header">
+      <span class="logo-text">UserUse</span>
+    </header>
+
+    <main class="support-body">
+      <h1>What is UserUse?</h1>
+      <p class="lead">
+        <strong>UserUse</strong> is a Chrome extension that helps you build websites and web apps <strong>without writing code</strong>. It recommends the right no-code and AI-assisted (“vibe coding”) tools for your goal, then <strong>guides you step-by-step</strong> on each tool’s website so you never feel lost. Whether you want a landing page, portfolio, simple SaaS, or online store, you get one consistent guide from signup through setup and deployment.
+      </p>
+
+      <h2>Why install UserUse?</h2>
+      <p>You want to build something on the web but don’t know where to start. There are many no-code and AI tools (Framer, Webflow, Bubble, Bolt.new, Cursor, Lovable, Google AI Studio, and more). Choosing the right one and learning each interface is overwhelming. UserUse helps by:</p>
+      <ul>
+        <li><strong>Recommending tools that fit your goal</strong> – Describe the website you want (e.g. “landing page for my product,” “membership site,” “online course”). The extension suggests which tools to use and why.</li>
+        <li><strong>Guiding you on the actual sites</strong> – When you open a recommended tool (e.g. Framer, Supabase, Vercel), the extension detects the site and shows <strong>what to do on this page</strong> in plain language, with steps you can follow and mark as done.</li>
+        <li><strong>Highlighting what to click</strong> – On supported pages, it can highlight the button or field you should use next so you spend less time searching the UI.</li>
+        <li><strong>Letting you ask questions</strong> – A built-in chat answers questions about the current page and your plan in non-technical terms so you can clarify anything without leaving the tab.</li>
+      </ul>
+      <p>You get a <strong>single, consistent guide</strong> across signup, setup, and deployment—without reading long docs or watching hours of tutorials.</p>
+
+      <h2>Main features</h2>
+      <div class="card">
+        <h3>1. Goal-based setup (survey)</h3>
+        <p>In one question you describe the website you want (e.g. landing page, demo, membership site, online course). The extension suggests a set of tools (no-code builders, AI coding tools, databases, hosting, payments) that match your goal. You choose which tools to use. For each service (e.g. Supabase, Stripe, Vercel), you can expand a short explanation of what it does and why you need it. A personalized plan is created with an ordered list of tools and steps (e.g. “Create account → Start project → Set up feature → Deploy”).</p>
+      </div>
+      <div class="card">
+        <h3>2. Step-by-step guidance on tool websites</h3>
+        <p>When you visit a supported tool’s website (e.g. aistudio.google.com, framer.com, webflow.com, bubble.io, bolt.new, cursor.sh, lovable.dev, vercel.com, and others), the extension detects which tool you’re on and shows a <strong>“What to do on this page”</strong> section with clear steps. Steps are generated or updated based on your plan, your choices in the survey, and the current page. They’re actionable (e.g. “Click the Start button,” “Enter your project name,” “Submit the form”) and avoid jargon. You can mark each step as done. Progress is saved so you can continue later. When all steps for a given tool/site are done, the extension can show a completion state and point you to the next tool or phase.</p>
+      </div>
+      <div class="card">
+        <h3>3. In-page spotlight (highlight)</h3>
+        <p>For many steps, the extension can <strong>highlight the exact element</strong> on the page (button, link, input) you should use. The rest of the page is dimmed so the target stands out. Clicking the highlighted element can automatically mark that step as complete and, when applicable, advance you to the next step. This reduces confusion on busy dashboards and multi-step flows.</p>
+      </div>
+      <div class="card">
+        <h3>4. Progress and plan overview</h3>
+        <p>Your plan is visible in the side panel: which tools you’re using and which steps are pending or done. Progress is computed per tool/domain (e.g. “Supabase setup done,” “Vercel deploy next”). You can open tool websites from the plan, reset and start a new plan, or go back to the survey to change your goal or tools.</p>
+      </div>
+      <div class="card">
+        <h3>5. Chat assistant</h3>
+        <p>A chat tab in the extension lets you ask questions in natural language (e.g. “What does this button do?” or “What should I do next?”). Answers use your current tab and your saved plan, and explain things in <strong>non-technical language</strong> so non-developers can follow. Chat history is stored in the extension so you can refer back to earlier answers.</p>
+      </div>
+      <div class="card">
+        <h3>6. Supported tools and sites</h3>
+        <p>The extension recognizes and can guide you on many popular no-code and vibe-coding platforms, including (and not limited to): <strong>AI / vibe coding:</strong> Google AI Studio, Bolt.new, Cursor, Lovable, Replit. <strong>No-code builders:</strong> Framer, Webflow, Bubble, Softr, Carrd, Notion. <strong>Learning / content:</strong> Teachable. <strong>Backend / infra:</strong> Supabase, Vercel, and similar services referenced in your plan. When you’re on one of these domains, the extension can show contextual steps and, where possible, spotlight the right UI elements.</p>
+      </div>
+
+      <h2>Who is it for?</h2>
+      <ul>
+        <li><strong>Non-developers</strong> who want to build a website or simple web app without learning to code.</li>
+        <li><strong>Beginners</strong> to no-code or “vibe coding” who get lost in complex dashboards and prefer clear, step-by-step instructions.</li>
+        <li><strong>Solo founders, marketers, educators, and small teams</strong> who need a landing page, portfolio, membership site, or small SaaS and want one place to get tool recommendations and in-context guidance.</li>
+        <li><strong>Anyone</strong> who has tried no-code tools but gave up because the learning curve felt steep—UserUse keeps the next action visible and simple.</li>
+      </ul>
+
+      <h2>How it works (in short)</h2>
+      <ol style="padding-left: 20px; margin-bottom: 16px;">
+        <li style="margin-bottom: 6px;"><strong>Install</strong> the extension and open its side panel.</li>
+        <li style="margin-bottom: 6px;"><strong>Describe</strong> the website you want in one sentence or a few words.</li>
+        <li style="margin-bottom: 6px;"><strong>Choose</strong> from the suggested tools (and optionally read why each service is recommended) and start your plan.</li>
+        <li style="margin-bottom: 6px;"><strong>Follow the steps</strong> in the side panel on each tool’s page. Use “Spotlight” when available to see exactly what to click; mark steps done as you go.</li>
+        <li style="margin-bottom: 6px;"><strong>Ask the chat</strong> anytime you’re unsure about the current page or next steps.</li>
+        <li style="margin-bottom: 6px;"><strong>Move to the next tool</strong> when the current one is complete, and repeat until your site is set up and deployed.</li>
+      </ol>
+      <p>Your choices and progress are stored locally in the extension so you can close the browser and continue later.</p>
+
+      <h2>Privacy and permissions</h2>
+      <p>The extension uses <strong>storage</strong> to save your survey answers, plan, and step progress. It needs <strong>access to the tabs you visit</strong> so it can detect which tool site you’re on and show the right guidance. It uses a <strong>side panel</strong> so the guide stays visible next to the tool’s website without covering the page. When you use AI features (recommendations, step generation, chat), your goal description, plan, and current page context may be sent to a backend service to generate responses. Check the extension’s or developer’s privacy policy for how that data is handled.</p>
+
+      <h2>Summary</h2>
+      <ul class="summary-list">
+        <li>Recommends no-code and vibe coding tools based on the website you want to build.</li>
+        <li>Guides you step-by-step on each tool’s site with clear “what to do on this page” instructions.</li>
+        <li>Highlights buttons and fields so you know what to click.</li>
+        <li>Tracks your progress and lets you ask questions in plain language.</li>
+      </ul>
+      <p>Install it if you want to <strong>build a website without code</strong> and prefer <strong>guided, in-context help</strong> instead of long manuals or generic tutorials.</p>
+
+      <div class="contact-box">
+        <div class="section-label">Contact</div>
+        <p style="margin-bottom: 0;">Questions, bug reports, or feature ideas: <a href="mailto:tpngs10120@gmail.com">tpngs10120@gmail.com</a></p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

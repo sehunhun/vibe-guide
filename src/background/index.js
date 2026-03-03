@@ -193,24 +193,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ? { steps: allPreviousSteps, completed: allCompleted }
           : undefined;
 
-        // Google AI Studio 전용: 하드코딩된 3단계 안내를 "완료"할 때마다 한 단계씩 순차로 노출
+        // Google AI Studio 전용: 하드코딩된 3단계 안내 (로케일별 문구 적용)
         const hostname = getDomainFromUrl(url);
         if (hostname === 'aistudio.google.com') {
           const BASE_STEPS = [
             {
-              text: '사전 설문에서 만든 웹사이트 아이디어 프롬프트를 복사해서 상단 입력창에 붙여넣으세요.',
+              text: chrome.i18n.getMessage('aiStudioStep1'),
               selector: 'div.prompt-input-wrapper.row.column',
               action: 'copy_system_prompt',
             },
             {
-              text: '입력창 오른쪽의 Build 버튼을 눌러 첫 번째 버전 앱을 생성하세요.',
-              // 상단 툴바의 Build 버튼만 선택
-              // - ms-button 디렉티브 사용
-              // - floating-toggle-button / ifl-button / model-button 변형은 제외
+              text: chrome.i18n.getMessage('aiStudioStep2'),
               selector: 'button[ms-button].mat-mdc-tooltip-trigger.ms-button-primary:not(.floating-toggle-button):not(.ifl-button):not(.model-button)',
             },
             {
-              text: '오른쪽 대화창에 수정하고 싶은 내용을 입력한 뒤, "Annotate app" 버튼으로 원하는 부분만 수정해 보세요.',
+              text: chrome.i18n.getMessage('aiStudioStep3'),
               selector: 'button.mat-mdc-tooltip-trigger.annotate-button.ms-button-filter-chip.ng-star-inserted',
             },
           ];

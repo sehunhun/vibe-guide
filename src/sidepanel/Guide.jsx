@@ -1011,7 +1011,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
 
       <div className="guide-footer">
         <button className="btn-text" onClick={onReset}>
-          🔄 처음부터 다시 설정
+          🔄 {chrome.i18n.getMessage('resetPlanButton')}
         </button>
       </div>
     </div>

@@ -179,14 +179,14 @@ export default function App() {
                 className={`guide-tab-btn ${activeTab === 'plan' ? 'active' : ''}`}
                 onClick={() => setActiveTab('plan')}
               >
-                {chrome.i18n.getMessage('tabPlan')}
+                {getUILocale() === 'en' ? 'Plan' : (chrome.i18n.getMessage('tabPlan') || '진행 플랜')}
               </button>
               <button
                 type="button"
                 className={`guide-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
                 onClick={() => setActiveTab('chat')}
               >
-                {chrome.i18n.getMessage('tabChat')}
+                {getUILocale() === 'en' ? 'Chat' : (chrome.i18n.getMessage('tabChat') || '채팅')}
               </button>
             </div>
             {activeTab === 'plan' ? (

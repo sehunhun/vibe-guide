@@ -232,21 +232,63 @@ export function buildChatPrompt(
     '',
     '# style',
     languageStyle,
+    locale === 'en' ? '- **Respond only in English.**' : '- **답변은 반드시 한국어로만 작성하세요.**',
   ].join('\n');
 
+  const isEn = locale === 'en';
+  const labels = isEn
+    ? {
+        surveySummary: '## Survey summary',
+        plan: '## Project plan',
+        pageUrl: '## Current page URL',
+        domainGuide: '## Domain guide',
+        domainGuideDesc: 'Reference for explaining the page. Use when describing the screen.',
+        stepsSoFar: '## Steps guided so far on this page',
+        done: '(done)',
+        notDone: '(not done)',
+        uiElements: '## Current page UI elements (slim JSON)',
+        uiElementsDesc: 'Use when explaining element names and roles.',
+        conversation: '## Conversation so far',
+        assistant: 'Assistant',
+        user: 'User',
+        currentQuestion: '## User\'s question',
+        noQuestion: '(no question)',
+        replyGuide: '**Reply guidelines**',
+        replyBullets: '- Explain technical terms in simple language; add examples if needed.\n- Focus on what each element does rather than step-by-step clicks.\n- Keep answers short and to the point.',
+      }
+    : {
+        surveySummary: '## 설문 요약',
+        plan: '## 프로젝트 플랜',
+        pageUrl: '## 현재 페이지 URL',
+        domainGuide: '## 도메인 가이드 문서',
+        domainGuideDesc: '다음은 현재 도메인에 대한 공식 가이드 문서입니다. 화면을 설명할 때 참고만 하세요.',
+        stepsSoFar: '## 이 페이지에 대해 지금까지 안내된 단계',
+        done: '(완료)',
+        notDone: '(미완료)',
+        uiElements: '## 현재 페이지 상호작용 요소 목록 (slim JSON)',
+        uiElementsDesc: '아래 JSON은 이 페이지에서 상호작용 가능한 UI 요소들의 슬림 목록입니다. 요소 이름과 역할을 설명할 때 참고만 하세요.',
+        conversation: '## 지금까지의 대화 내용',
+        assistant: '어시스턴트',
+        user: '사용자',
+        currentQuestion: '## 사용자의 현재 질문',
+        noQuestion: '(질문 없음)',
+        replyGuide: '**답변 지침**',
+        replyBullets: '- 개발 용어를 최대한 풀어서 설명하고, 필요한 경우 예시를 들어주세요.\n- 단계 지시보다는, 화면에 보이는 요소가 무슨 역할을 하는지 중심으로 설명해주세요.\n- 짧고 명확하게 답변하세요.',
+      };
+
   const userParts = [
-    '## 설문 요약',
+    labels.surveySummary,
     answersText,
-    '## 프로젝트 플랜',
+    labels.plan,
     planText,
-    '## 현재 페이지 URL',
+    labels.pageUrl,
     pageUrl,
   ];
 
   if (domainGuide) {
     userParts.push(
-      '## 도메인 가이드 문서',
-      `다음은 현재 도메인(${pageUrl})에 대한 공식 가이드 문서입니다. 화면을 설명할 때 참고만 하세요.`,
+      labels.domainGuide,
+      labels.domainGuideDesc,
       '',
       domainGuide,
     );
@@ -255,17 +297,16 @@ export function buildChatPrompt(
   if (previousStepsForUrl?.steps?.length) {
     const completed = previousStepsForUrl.completed || [];
     const lines = previousStepsForUrl.steps.map((s, i) => {
-      const status = completed[i] ? '(완료)' : '(미완료)';
+      const status = completed[i] ? labels.done : labels.notDone;
       return `${i + 1}) ${s.text} ${status}`;
     });
-    userParts.push('## 이 페이지에 대해 지금까지 안내된 단계', lines.join('\n'));
+    userParts.push(labels.stepsSoFar, lines.join('\n'));
   }
 
-  // axtree slim 노드가 있으면 JSON으로 함께 제공
   if (pageContext?.type === 'axtree' && Array.isArray(pageContext.nodes) && pageContext.nodes.length > 0) {
     userParts.push(
-      '## 현재 페이지 상호작용 요소 목록 (slim JSON)',
-      '아래 JSON은 이 페이지에서 상호작용 가능한 UI 요소들의 슬림 목록입니다. 요소 이름과 역할을 설명할 때 참고만 하세요.',
+      labels.uiElements,
+      labels.uiElementsDesc,
       '```json',
       JSON.stringify(pageContext.nodes, null, 2),
       '```',
@@ -274,20 +315,18 @@ export function buildChatPrompt(
 
   if (Array.isArray(history) && history.length > 0) {
     const lines = history.map((m, idx) => {
-      const role = m.role === 'assistant' ? '어시스턴트' : '사용자';
+      const role = m.role === 'assistant' ? labels.assistant : labels.user;
       return `${idx + 1}. [${role}] ${m.text}`;
     });
-    userParts.push('## 지금까지의 대화 내용', lines.join('\n'));
+    userParts.push(labels.conversation, lines.join('\n'));
   }
 
   userParts.push(
-    '## 사용자의 현재 질문',
-    userMessage || '(질문 없음)',
+    labels.currentQuestion,
+    userMessage || labels.noQuestion,
     '',
-    '**답변 지침**',
-    '- 개발 용어를 최대한 풀어서 설명하고, 필요한 경우 예시를 들어주세요.',
-    '- 단계 지시(예: 어디를 클릭하세요) 보다는, 화면에 보이는 요소가 무슨 역할을 하는지 중심으로 설명해주세요.',
-    '- 너무 길게 설명하기보다는, 중요한 포인트를 중심으로 짧고 명확하게 답변하세요.',
+    labels.replyGuide,
+    labels.replyBullets,
   );
 
   return { system, user: userParts.join('\n') };

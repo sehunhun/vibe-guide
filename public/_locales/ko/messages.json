@@ -5,6 +5,8 @@
 
   "tabPlan": { "message": "진행 플랜" },
   "tabChat": { "message": "채팅" },
+  "resetPlanButton": { "message": "처음부터 다시 설정" },
+  "resetPlanButtonLong": { "message": "처음부터 다시 설정하기" },
   "appSettings": { "message": "설정" },
   "awaitingSurveyText": { "message": "설문을 새 탭에서 진행해 주세요." },
   "awaitingSurveyHint": { "message": "완료 후 가이드 시작하기를 누르면, 확장 프로그램 아이콘을 클릭해 여기서 가이드를 볼 수 있어요." },
@@ -84,5 +86,9 @@
   "errorChatPage": { "message": "이 페이지에서는 채팅을 사용할 수 없습니다. 일반 웹페이지에서 시도해주세요." },
   "errorElementNotFound": { "message": "요소를 찾을 수 없습니다." },
   "errorBackendUrl": { "message": "설정에서 백엔드 서버 URL을 입력해주세요." },
-  "parseFailureMessage": { "message": "안내를 생성하지 못했습니다. 다시 시도해 주세요." }
+  "parseFailureMessage": { "message": "안내를 생성하지 못했습니다. 다시 시도해 주세요." },
+
+  "aiStudioStep1": { "message": "사전 설문에서 만든 웹사이트 아이디어 프롬프트를 복사해서 상단 입력창에 붙여넣으세요." },
+  "aiStudioStep2": { "message": "입력창 오른쪽의 Build 버튼을 눌러 첫 번째 버전 앱을 생성하세요." },
+  "aiStudioStep3": { "message": "오른쪽 대화창에 수정하고 싶은 내용을 입력한 뒤, \"Annotate app\" 버튼으로 원하는 부분만 수정해 보세요." }
 }

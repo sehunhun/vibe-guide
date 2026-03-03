@@ -307,7 +307,7 @@ export default function GuideApp() {
 
       <div className="guide-footer">
         <button className="btn-text" onClick={handleReset}>
-          🔄 처음부터 다시 설정하기
+          🔄 {chrome.i18n.getMessage('resetPlanButtonLong')}
         </button>
       </div>
     </div>
