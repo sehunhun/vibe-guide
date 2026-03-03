@@ -171,11 +171,6 @@ export default function SurveyApp() {
                     </div>
                     <div className="option-text">
                       <span className="option-label">{tool.description}</span>
-                      {tool.requirements?.length > 0 && (
-                        <span className="option-desc">
-                          {tool.requirements.join(', ')}
-                        </span>
-                      )}
                     </div>
                   </button>
                 );

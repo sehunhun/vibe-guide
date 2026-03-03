@@ -129,9 +129,6 @@ export default function Survey({ onComplete }) {
                   </div>
                   <div className="option-content">
                     <span className="option-label">{tool.description}</span>
-                    {tool.requirements?.length > 0 && (
-                      <span className="option-desc">{tool.requirements.join(', ')}</span>
-                    )}
                   </div>
                 </button>
               );
