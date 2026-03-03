@@ -35,16 +35,20 @@ def get_openai_api_key():
 
 
 class Step(BaseModel):
-    text: str
-    selector: Optional[str] = None
+    step_text: str = ""
+    backendDOMNodeId: Optional[int] = None
+    text: Optional[str] = None  # 하위 호환 표시용 (step_text 와 동일)
+    selector: Optional[str] = None  # 하위 호환
 
 
 class GuidanceRequest(BaseModel):
     system: str
     user: str
     model: str = "gpt-4o-mini"
-    page_context_type: Literal["html", "image"]
-    page_context_content: Optional[str] = None  # HTML 문자열 또는 base64 이미지
+    page_context_type: Literal["html", "image", "axtree"] = "html"
+    page_context_content: Optional[str] = None  # HTML 또는 base64 이미지 (axtree 시 미사용)
+    page_url: Optional[str] = None  # axtree 시 참고용
+    slim_nodes: Optional[List[dict]] = None  # axtree 시 필수: 접근성 트리 slim 목록
 
 
 class GuidanceResponse(BaseModel):
@@ -83,6 +87,27 @@ db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email
 # job
 사용자가 요청한 웹사이트 제작에 꼭 필요한 필수적인 기능들을 아래와 같은 json 형식으로 반환해야 해. 위 tools를 최대한 활용해서 누락되는 요구 사항이 없도록 해.
 반드시 tools 배열만 반환하고, 각 항목은 id(1부터 순번), description(한글 도구 설명), requirements(위 도구 이름 중 필요한 것만 문자열 배열)를 가진다."""
+
+# axtree 모드: AI 응답 구조 (response_format)
+GUIDANCE_AXTREE_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "steps": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "step_text": {"type": "string", "description": "다음 단계 안내 문장"},
+                    "backendDOMNodeId": {"type": ["integer", "null"], "description": "선택한 요소의 backendDOMNodeId (slim 목록에 있는 값)"},
+                },
+                "required": ["step_text", "backendDOMNodeId"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["steps"],
+    "additionalProperties": False,
+}
 
 SURVEY_TOOLS_JSON_SCHEMA = {
     "type": "object",
@@ -132,10 +157,17 @@ async def get_guidance(request: GuidanceRequest):
             logger.error(f"환경변수 오류: {str(e)}")
             raise HTTPException(status_code=500, detail=f"환경변수 오류: {str(e)}")
         
-        # OpenAI API 호출 준비
-        content = [{"type": "text", "text": request.user}]
-        
-        # 이미지가 있으면 추가
+        use_axtree = request.slim_nodes is not None and len(request.slim_nodes) > 0
+        user_content = request.user
+        if use_axtree:
+            user_content = (
+                request.user
+                + "\n\n## 현재 페이지 상호작용 요소\n"
+                + "아래 목록에서 반드시 하나의 요소(backendDOMNodeId)를 골라 단계를 안내하세요. 선택한 노드의 backendDOMNodeId를 그대로 응답에 포함하세요.\n\n"
+                + json.dumps(request.slim_nodes, ensure_ascii=False, indent=2)
+            )
+
+        content = [{"type": "text", "text": user_content}]
         if request.page_context_type == "image" and request.page_context_content:
             image_url = request.page_context_content
             if not image_url.startswith("data:"):
@@ -146,7 +178,24 @@ async def get_guidance(request: GuidanceRequest):
             })
             logger.info("이미지 포함됨")
 
-        # OpenAI API 호출
+        payload = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": request.system},
+                {"role": "user", "content": content},
+            ],
+            "max_tokens": 2048,
+        }
+        if use_axtree:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "guidance_steps",
+                    "strict": True,
+                    "schema": GUIDANCE_AXTREE_JSON_SCHEMA,
+                },
+            }
+
         logger.info("OpenAI API 호출 시작")
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
@@ -155,43 +204,64 @@ async def get_guidance(request: GuidanceRequest):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {api_key}",
                 },
-                json={
-                    "model": request.model,
-                    "messages": [
-                        {"role": "system", "content": request.system},
-                        {"role": "user", "content": content},
-                    ],
-                    "max_tokens": 2048,
-                },
+                json=payload,
             )
-            
+
             logger.info(f"OpenAI API 응답 상태: {response.status_code}")
-            
+
             if not response.is_success:
                 try:
                     error_data = response.json()
                     error_text = error_data.get("error", {}).get("message", response.text)
-                except:
+                except Exception:
                     error_text = response.text
                 logger.error(f"OpenAI API 오류: {error_text}")
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"OpenAI API 오류 ({response.status_code}): {error_text}"
                 )
-            
+
             data = response.json()
             raw = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            
+
             if not raw:
                 logger.error("OpenAI API가 빈 응답을 반환했습니다.")
                 raise HTTPException(status_code=500, detail="OpenAI API가 빈 응답을 반환했습니다.")
-            
+
             logger.info(f"OpenAI 응답 받음 (길이: {len(raw)})")
-            
-            # JSON 파싱
-            parsed = parse_ai_response(raw)
-            logger.info(f"파싱 완료: {len(parsed.get('steps', []))}개 단계")
-            return GuidanceResponse(steps=parsed.get("steps", []))
+
+            if use_axtree:
+                try:
+                    parsed = json.loads(raw)
+                    steps_data = parsed.get("steps") or []
+                    steps = [
+                        Step(
+                            step_text=(s.get("step_text") or "").strip(),
+                            backendDOMNodeId=s.get("backendDOMNodeId") if s.get("backendDOMNodeId") is not None else None,
+                            text=(s.get("step_text") or "").strip(),
+                            selector=None,
+                        )
+                        for s in steps_data
+                        if (s.get("step_text") or "").strip()
+                    ]
+                except json.JSONDecodeError as e:
+                    logger.error(f"axtree 응답 JSON 파싱 실패: {e}")
+                    steps = [Step(step_text="안내를 생성하지 못했습니다. 다시 시도해 주세요.", backendDOMNodeId=None, text="안내를 생성하지 못했습니다. 다시 시도해 주세요.", selector=None)]
+            else:
+                parsed = parse_ai_response(raw)
+                legacy_steps = parsed.get("steps", [])
+                steps = [
+                    Step(
+                        step_text=(s.get("text") or "").strip(),
+                        backendDOMNodeId=None,
+                        text=(s.get("text") or "").strip(),
+                        selector=s.get("selector"),
+                    )
+                    for s in legacy_steps
+                    if (s.get("text") or "").strip()
+                ]
+            logger.info(f"파싱 완료: {len(steps)}개 단계")
+            return GuidanceResponse(steps=steps)
             
     except HTTPException:
         raise

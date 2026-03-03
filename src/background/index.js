@@ -3,10 +3,14 @@
  *
  * - 아이콘 클릭 → plan 없으면 survey.html 전체화면 탭, 있으면 사이드패널(Step2) 열기
  * - 탭 URL 변경 시 사이드패널에 TAB_CHANGED 메시지 전달
- * - GET_PAGE_GUIDANCE: 현재 탭 HTML(또는 스크린샷) + 설문/플랜 → AI 안내
+ * - GET_PAGE_GUIDANCE: 현재 탭 접근성 트리(slim) 또는 fallback HTML/이미지 → AI 안내
+ * - SPOTLIGHT: selector( content script ) 또는 backendDOMNodeId( CDP DOM.highlightNode )
  */
 
 import { getPageGuidance } from '../data/ai.js';
+import { filterAndSlim } from '../data/axtree.js';
+
+const DEBUGGER_VERSION = '1.3';
 
 const SURVEY_URL = chrome.runtime.getURL('survey.html');
 
@@ -67,7 +71,38 @@ function isSameDomain(url1, url2) {
   return domain1 === domain2;
 }
 
-/** 현재 탭에서 HTML 또는 스크린샷 수집 */
+/** 현재 탭에서 CDP로 접근성 트리 수집 → filter + slim (스포트라이트용 backendDOMNodeId 유효) */
+async function getAxtreeSlim(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+    throw new Error('이 페이지에서는 안내를 받을 수 없습니다. 일반 웹페이지에서 시도해주세요.');
+  }
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach({ tabId }, DEBUGGER_VERSION, (err) => {
+      if (err) {
+        reject(new Error('페이지 분석 권한이 필요합니다. 확장 프로그램 디버거 권한을 허용해주세요.'));
+        return;
+      }
+      chrome.debugger.sendCommand({ tabId }, 'Accessibility.getFullAXTree', {}, (cmdErr, result) => {
+        const detach = () => {
+          chrome.debugger.detach({ tabId }, () => {});
+        };
+        if (cmdErr) {
+          detach();
+          reject(new Error(cmdErr.message || '접근성 트리를 가져오지 못했습니다.'));
+          return;
+        }
+        const nodes = result?.nodes ?? [];
+        const slim = filterAndSlim(nodes);
+        console.log('[vibe-guide] 접근성 트리 수집 완료', { tabId, url: tab.url, totalNodes: nodes.length, slimCount: slim.length });
+        detach();
+        resolve({ type: 'axtree', nodes: slim, url: tab.url });
+      });
+    });
+  });
+}
+
+/** 현재 탭에서 HTML 또는 스크린샷 수집 (axtree 실패 시 fallback) */
 async function getPageContext(tabId) {
   try {
     const res = await chrome.tabs.sendMessage(tabId, { type: 'GET_PAGE_HTML' });
@@ -102,24 +137,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       try {
         const { tabId } = msg;
-        const [storage, pageContext] = await Promise.all([
-          chrome.storage.local.get(['plan', 'answers', 'pageGuidanceCache', 'pageStepCompletions']),
-          getPageContext(tabId),
-        ]);
+        const storage = await chrome.storage.local.get(['plan', 'answers', 'pageGuidanceCache', 'pageStepCompletions']);
         const plan = storage.plan || null;
         const answers = storage.answers || null;
         if (!plan) {
           return { error: '진행 플랜이 없습니다. 먼저 설문을 완료해주세요.' };
         }
+        let pageContext;
+        try {
+          pageContext = await getAxtreeSlim(tabId);
+        } catch (_) {
+          pageContext = await getPageContext(tabId);
+        }
         const cache = storage.pageGuidanceCache || {};
         const completions = storage.pageStepCompletions || {};
         const url = pageContext.url || '';
-        
-        // 같은 도메인의 모든 단계를 수집
+
         const currentDomain = getDomainFromUrl(url);
         const allPreviousSteps = [];
         const allCompleted = [];
-        
+
         if (currentDomain) {
           for (const [cachedUrl, guidance] of Object.entries(cache)) {
             if (guidance?.steps?.length && isSameDomain(cachedUrl, url)) {
@@ -131,7 +168,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
           }
         } else {
-          // 도메인 추출 실패 시 현재 URL만 사용
           if (cache[url]?.steps?.length) {
             allPreviousSteps.push(...cache[url].steps);
             const urlCompletions = completions[url] || [];
@@ -140,13 +176,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             });
           }
         }
-        
+
         const previousStepsForUrl = allPreviousSteps.length > 0
           ? { steps: allPreviousSteps, completed: allCompleted }
           : undefined;
         const result = await getPageGuidance(
           { plan, answers, previousStepsForUrl },
-          { type: pageContext.type, content: pageContext.content },
+          { type: pageContext.type, content: pageContext.content, nodes: pageContext.nodes },
           pageContext.url,
         );
         return result;
@@ -154,13 +190,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return { error: e.message || '안내를 불러오는 데 실패했습니다.' };
       }
     })().then(sendResponse);
-    return true; // 비동기 sendResponse
+    return true;
   }
 
   if (msg.type === 'SPOTLIGHT_ELEMENT') {
-    chrome.tabs.sendMessage(msg.tabId, { type: 'SPOTLIGHT_ELEMENT', selector: msg.selector })
-      .then(res => sendResponse(res ?? { ok: false }))
-      .catch(() => sendResponse({ ok: false, error: '페이지와 통신할 수 없습니다.' }));
+    const { tabId, selector, backendDOMNodeId } = msg;
+    if (backendDOMNodeId != null && typeof backendDOMNodeId === 'number') {
+      chrome.debugger.attach({ tabId }, DEBUGGER_VERSION, (err) => {
+        if (err) {
+          sendResponse({ ok: false, error: err.message || '스포트라이트를 사용할 수 없습니다.' });
+          return;
+        }
+        chrome.debugger.sendCommand({ tabId }, 'DOM.highlightNode', {
+          backendNodeId: backendDOMNodeId,
+          highlightConfig: {
+            contentColor: { r: 124, g: 111, b: 247, a: 0.3 },
+            borderColor: { r: 124, g: 111, b: 247, a: 1 },
+          },
+        }, () => {});
+        const hideAndDetach = () => {
+          chrome.debugger.sendCommand({ tabId }, 'DOM.hideHighlight', {}, () => {});
+          chrome.debugger.detach({ tabId }, () => {});
+        };
+        setTimeout(hideAndDetach, 4000);
+        sendResponse({ ok: true });
+      });
+    } else if (selector) {
+      chrome.tabs.sendMessage(tabId, { type: 'SPOTLIGHT_ELEMENT', selector })
+        .then(res => sendResponse(res ?? { ok: false }))
+        .catch(() => sendResponse({ ok: false, error: '페이지와 통신할 수 없습니다.' }));
+    } else {
+      sendResponse({ ok: false, error: 'selector 또는 backendDOMNodeId가 필요합니다.' });
+    }
     return true;
   }
 

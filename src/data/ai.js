@@ -156,7 +156,9 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
     }
   }
 
-  if (pageContext.type === 'html' && pageContext.content) {
+  if (pageContext.type === 'axtree') {
+    userParts.push('(현재 페이지 상호작용 요소 목록은 백엔드에서 첨부됩니다. 해당 목록에서 반드시 하나의 요소(backendDOMNodeId)를 골라 단계를 안내하세요.)');
+  } else if (pageContext.type === 'html' && pageContext.content) {
     const html = pageContext.content.length > MAX_HTML_LEN
       ? pageContext.content.slice(0, MAX_HTML_LEN) + '\n... (truncated)'
       : pageContext.content;
@@ -217,28 +219,38 @@ export function getStoredAISettings() {
 
 /**
  * 백엔드 API 호출
+ * @param {string} backendUrl
+ * @param {string} modelId
+ * @param {{ system: string, user: string }} messages
+ * @param {string} pageContextType - 'axtree' | 'html' | 'image'
+ * @param {string|null} imageDataUrl - image 시에만
+ * @param {string} [pageUrl] - axtree 시 필수
+ * @param {Array<object>} [slimNodes] - axtree 시 필수
  */
-async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl) {
+async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl, pageUrl = '', slimNodes = null) {
   if (!backendUrl || !backendUrl.trim()) {
     throw new Error('백엔드 서버 URL을 설정해주세요.');
   }
 
-  // 백엔드 URL 정규화 (끝에 / 제거)
   const baseUrl = backendUrl.trim().replace(/\/$/, '');
   const apiUrl = `${baseUrl}/api/guidance`;
 
+  const body = {
+    system: messages.system,
+    user: messages.user,
+    model: modelId,
+    page_context_type: pageContextType,
+    page_context_content: imageDataUrl || null,
+  };
+  if (pageContextType === 'axtree') {
+    body.page_url = pageUrl || null;
+    body.slim_nodes = Array.isArray(slimNodes) ? slimNodes : null;
+  }
+
   const res = await fetch(apiUrl, {
     method: 'POST',
-    headers: {
-      'Content': 'application/json',
-    },
-    body: JSON.stringify({
-      system: messages.system,
-      user: messages.user,
-      model: modelId,
-      page_context_type: pageContextType,
-      page_context_content: imageDataUrl || null,
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -247,7 +259,12 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
   }
 
   const data = await res.json();
-  return { steps: data.steps || [] };
+  const steps = (data.steps || []).map((s) => ({
+    text: s.step_text ?? s.text ?? '',
+    selector: s.selector ?? null,
+    backendDOMNodeId: s.backendDOMNodeId ?? null,
+  }));
+  return { steps };
 }
 
 /** 파싱 실패 시 반환하는 고정 메시지 (재시도 판별용) */
@@ -332,6 +349,7 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
 
   const messages = buildPrompt(context, pageContext, pageUrl, domainGuide);
   const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
+  const slimNodes = pageContext.type === 'axtree' ? pageContext.nodes : null;
 
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -341,7 +359,9 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
         modelId,
         messages,
         pageContext.type,
-        imageDataUrl
+        imageDataUrl,
+        pageUrl,
+        slimNodes
       );
       if (!isParseFailureResult(result)) return result;
       if (attempt < maxAttempts) {

@@ -481,11 +481,14 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     });
   }, [currentTab?.tabId, pageUrl]);
 
-  /** 해당 단계 요소로 스포트라이트 */
-  const handleSpotlight = useCallback((selector) => {
-    if (!currentTab?.tabId || !selector) return;
+  /** 해당 단계 요소로 스포트라이트 (selector 또는 backendDOMNodeId) */
+  const handleSpotlight = useCallback((step) => {
+    if (!currentTab?.tabId) return;
+    const selector = step?.selector ?? null;
+    const backendDOMNodeId = step?.backendDOMNodeId ?? null;
+    if (!selector && (backendDOMNodeId == null || typeof backendDOMNodeId !== 'number')) return;
     chrome.runtime.sendMessage(
-      { type: 'SPOTLIGHT_ELEMENT', tabId: currentTab.tabId, selector },
+      { type: 'SPOTLIGHT_ELEMENT', tabId: currentTab.tabId, selector, backendDOMNodeId },
       () => {},
     );
   }, [currentTab?.tabId]);
@@ -827,11 +830,11 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                     </div>
                     {!isCompletionMessage && (
                       <div className="page-guidance-step-actions">
-                        {step.selector && (
+                        {(step.selector || (step.backendDOMNodeId != null && typeof step.backendDOMNodeId === 'number')) && (
                           <button
                             type="button"
                             className="btn-spotlight"
-                            onClick={() => handleSpotlight(step.selector)}
+                            onClick={() => handleSpotlight(step)}
                           >
                             📍 위치로 이동
                           </button>
