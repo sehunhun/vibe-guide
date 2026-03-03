@@ -13,14 +13,15 @@ export default function App() {
   // 가이드 진입 시 API 키 유효 여부 (null=미확인, true/false)
   const [apiKeyValid, setApiKeyValid] = useState(null);
 
-  // 초기 로드: 저장된 plan 여부 확인
+  // 초기 로드: plan 있으면 guide, 없으면 설문은 탭에서만 (사이드패널에는 awaiting_survey)
   useEffect(() => {
     storage.getPlan().then(savedPlan => {
       if (savedPlan) {
         setPlan(savedPlan);
         setScreen('guide');
       } else {
-        setScreen('survey');
+        setScreen('awaiting_survey');
+        chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' });
       }
     });
   }, []);
@@ -66,7 +67,7 @@ export default function App() {
   const handleReset = async () => {
     await storage.clearAll();
     setPlan(null);
-    setScreen('survey');
+    setScreen('awaiting_survey'); // 사이드패널에는 설문 안 띄움, 전체화면 탭에서만 진행
     chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' });
   };
 
@@ -107,6 +108,19 @@ export default function App() {
       <main className="app-main">
         {screen === 'survey' && (
           <Survey onComplete={handleSurveyComplete} />
+        )}
+        {screen === 'awaiting_survey' && (
+          <div className="awaiting-survey">
+            <p className="awaiting-survey-text">설문을 새 탭에서 진행해 주세요.</p>
+            <p className="awaiting-survey-hint">완료 후 <strong>가이드 시작하기</strong>를 누르면, 확장 프로그램 아이콘을 클릭해 여기서 가이드를 볼 수 있어요.</p>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' })}
+            >
+              설문 탭 열기
+            </button>
+          </div>
         )}
         {screen === 'guide' && apiKeyValid === null && (
           <div className="loading guide-key-check">

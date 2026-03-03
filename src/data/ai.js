@@ -10,7 +10,7 @@ import demoGuide from './guides/demo-guide.md';
 
 const MAX_HTML_LEN = 30000; // 토큰 절감용
 
-/** 설문 answers를 읽기 쉬운 텍스트로 (단일 질문 플로우 + 기존 다중 질문 모두 지원) */
+/** 설문 answers를 읽기 쉬운 텍스트로 (기존 다중 질문 플로우용 폴백) */
 function formatAnswers(answers) {
   if (!answers) return '없음';
   const lines = [];
@@ -30,6 +30,30 @@ function formatAnswers(answers) {
     if (label) lines.push(`- ${q.title}: ${label}`);
   }
   return lines.length ? lines.join('\n') : '없음';
+}
+
+/**
+ * 설문 요약 (옵션 2): 만들려는 웹사이트 + 도구별 이름·용도
+ * plan.userQuery, plan.requirements 있으면 새 포맷, 없으면 formatAnswers(answers) 폴백
+ */
+function formatSurveySummary(plan, answers) {
+  const userQuery = (plan?.userQuery || answers?.siteGoal || '').trim();
+  const requirements = plan?.requirements;
+  if (requirements?.length > 0) {
+    const lines = [
+      `만들려는 웹사이트: ${userQuery || '(미입력)'}`,
+      '',
+      '사용할 도구 및 용도:',
+      ...requirements.map((r) => {
+        const desc = (r.descriptions && r.descriptions.length > 0)
+          ? [...new Set(r.descriptions)].join(', ')
+          : '연동·설정';
+        return `- ${r.name}: ${desc}`;
+      }),
+    ];
+    return lines.join('\n');
+  }
+  return formatAnswers(answers);
 }
 
 /** 플랜 요약 (현재 스텝 중심) */
@@ -53,7 +77,7 @@ function formatPlan(plan) {
  */
 export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
   const { plan, answers, previousStepsForUrl } = context;
-  const answersText = formatAnswers(answers);
+  const answersText = formatSurveySummary(plan, answers);
   const planText = formatPlan(plan);
 
   const system = `당신은 비개발자를 위한 웹 가이드 어시스턴트입니다.

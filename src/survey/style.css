@@ -50,6 +50,14 @@ body {
   align-items: center;
   gap: 8px;
 }
+.logo.logo-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+.logo.logo-btn:hover .logo-text { opacity: 0.85; }
 .logo-icon { font-size: 22px; }
 .logo-text {
   font-size: 18px;
@@ -318,6 +326,7 @@ body {
   transition: border-color 0.15s, background 0.15s;
 }
 .btn-back:hover { border-color: #a78bfa; background: #f5f0ff; }
+.btn-back:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 .btn-next, .btn-finish {
   flex: 1;
   background: linear-gradient(135deg, #7c3aed, #5b21b6);

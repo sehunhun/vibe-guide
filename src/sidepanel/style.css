@@ -98,6 +98,17 @@ body {
 .guide-key-required-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .guide-key-required-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
 
+.awaiting-survey {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+  text-align: center;
+}
+.awaiting-survey-text { font-size: 15px; font-weight: 600; color: var(--text); }
+.awaiting-survey-hint { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.awaiting-survey-hint strong { color: var(--accent); font-weight: 600; }
+
 /* ===== 공통 버튼 ===== */
 .btn-primary {
   background: var(--accent);

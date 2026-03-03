@@ -110,10 +110,10 @@ export default function SurveyApp() {
   return (
     <div className="survey-page">
       <header className="survey-header">
-        <div className="logo">
+        <button type="button" className="logo logo-btn" onClick={() => setStep(0)} aria-label="첫 단계로">
           <span className="logo-icon">⚡</span>
           <span className="logo-text">UserUse</span>
-        </div>
+        </button>
         <span className="step-badge">{step + 1} / 3</span>
       </header>
 
@@ -227,23 +227,26 @@ export default function SurveyApp() {
                 );
               })}
             </div>
-            <button className="btn-start btn-start-inline" onClick={handleGuideStart}>
-              가이드 시작하기 🚀
-            </button>
           </>
         )}
       </div>
 
       <div className="survey-footer">
-        {step === 0 ? (
-          <button
-            className="btn-next"
-            disabled={!siteGoal.trim() || submitLoading}
-            onClick={handleNext}
-          >
-            {submitLoading ? '추천 받는 중…' : '다음 →'}
-          </button>
-        ) : step === 1 ? (
+        {step === 0 && (
+          <>
+            <button className="btn-back" disabled aria-hidden="true">
+              ← 이전
+            </button>
+            <button
+              className="btn-next"
+              disabled={!siteGoal.trim() || submitLoading}
+              onClick={handleNext}
+            >
+              {submitLoading ? '추천 받는 중…' : '다음 →'}
+            </button>
+          </>
+        )}
+        {step === 1 && (
           <>
             <button className="btn-back" onClick={() => setStep(0)}>
               ← 이전
@@ -256,10 +259,16 @@ export default function SurveyApp() {
               다음 →
             </button>
           </>
-        ) : (
-          <button className="btn-back" onClick={() => setStep(1)}>
-            ← 이전
-          </button>
+        )}
+        {step === 2 && (
+          <>
+            <button className="btn-back" onClick={() => setStep(1)}>
+              ← 이전
+            </button>
+            <button className="btn-next" onClick={handleGuideStart}>
+              가이드 시작하기 →
+            </button>
+          </>
         )}
       </div>
     </div>
