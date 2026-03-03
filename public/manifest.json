@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "UserUse - 바이브코딩 가이드",
+  "name": "__MSG_extName__",
   "version": "1.0.0",
-  "description": "비개발자를 위한 노코딩/바이브코딩 툴 추천 및 단계별 가이드",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -13,7 +14,7 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png"
     },
-    "default_title": "UserUse 열기"
+    "default_title": "__MSG_actionTitle__"
   },
   "background": {
     "service_worker": "background.js",

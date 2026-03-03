@@ -170,6 +170,8 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   const [selectedDomainUrl, setSelectedDomainUrl] = useState(null); // 선택된 도메인의 URL (링크 클릭 시)
   const previousDomainRef = useRef(null); // 이전 도메인 추적
   const pageGuidanceSectionRef = useRef(null); // "이 페이지에서 할 일" 섹션 ref
+  const pendingAutoCompleteRef = useRef(null); // 마지막 스포트라이트 단계 (자동 완료용)
+  const [systemPromptCopied, setSystemPromptCopied] = useState(false);
 
   const pageUrl = currentTab?.url || '';
 
@@ -247,6 +249,36 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   const handleOpenTool = (url) => {
     chrome.tabs.create({ url });
   };
+
+  const handleCopySystemPrompt = useCallback(() => {
+    const prompt = plan?.systemPrompt;
+    if (!prompt) return;
+
+    const markCopied = () => {
+      setSystemPromptCopied(true);
+      setTimeout(() => setSystemPromptCopied(false), 1500);
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(prompt).then(markCopied).catch(() => {});
+      return;
+    }
+
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = prompt;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      markCopied();
+    } catch {
+      // ignore
+    }
+  }, [plan?.systemPrompt]);
 
   /** 해당 도메인의 "이 페이지에서 할 일" 표시 */
   const handleSwitchToDomain = useCallback((url) => {
@@ -432,9 +464,9 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
           // AI가 빈 배열을 반환한 경우 (더 이상 단계가 없음)
           // 완료 메시지를 steps에 추가 (기존 단계 유지)
           const completionMessage = {
-            text: '🎉 이 페이지에서 할 일이 완료 되었습니다!',
+            text: '🎉 ' + chrome.i18n.getMessage('guideCompletionMessage'),
             selector: null,
-            isCompletionMessage: true, // 완료 메시지 플래그
+            isCompletionMessage: true,
           };
           
           // 기존 단계들을 유지하면서 완료 메시지만 추가
@@ -484,15 +516,47 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   /** 해당 단계 요소로 스포트라이트 (selector 또는 backendDOMNodeId) */
   const handleSpotlight = useCallback((step) => {
     if (!currentTab?.tabId) return;
+    const sourceUrl = step?.sourceUrl || pageUrl;
+    const sourceIndex = step?.sourceIndex !== undefined ? step.sourceIndex : null;
     const selector = step?.selector ?? null;
     const backendDOMNodeId = step?.backendDOMNodeId ?? null;
     const hasBackendId = backendDOMNodeId != null && Number.isFinite(Number(backendDOMNodeId));
     if (!selector && !hasBackendId) return;
+
+    if (sourceUrl && sourceIndex != null) {
+      pendingAutoCompleteRef.current = {
+        sourceUrl,
+        sourceIndex,
+        timestamp: Date.now(),
+      };
+    } else {
+      pendingAutoCompleteRef.current = null;
+    }
+
     chrome.runtime.sendMessage(
       { type: 'SPOTLIGHT_ELEMENT', tabId: currentTab.tabId, selector, backendDOMNodeId },
       () => {},
     );
-  }, [currentTab?.tabId]);
+  }, [currentTab?.tabId, pageUrl]);
+
+  // 콘텐츠 스크립트에서 스포트라이트 대상 요소 클릭 시 자동으로 해당 단계를 완료 처리
+  useEffect(() => {
+    const handler = (msg) => {
+      if (!msg || msg.type !== 'SPOTLIGHT_TARGET_CLICKED') return;
+      const pending = pendingAutoCompleteRef.current;
+      if (!pending) return;
+
+      const { sourceUrl, sourceIndex } = pending;
+      // 클릭과 동시에 해당 단계를 완료 처리
+      savePageStepCompletion(sourceUrl, sourceIndex, true);
+      // 한 번 처리 후에는 초기화
+      if (pendingAutoCompleteRef.current === pending) {
+        pendingAutoCompleteRef.current = null;
+      }
+    };
+    chrome.runtime.onMessage.addListener(handler);
+    return () => chrome.runtime.onMessage.removeListener(handler);
+  }, [savePageStepCompletion]);
 
   /** 단계 제거 */
   const removeStep = useCallback((sourceUrl, stepIndex) => {
@@ -571,10 +635,10 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             const allCompleted = allSteps.length > 0 && allSteps.every(item => item.completed);
             
             if (allCompleted) {
-              // 모든 단계가 완료되었을 때만 자동으로 다음 단계 요청
+              // 모든 단계가 완료되었을 때만 자동으로 다음 단계 요청 (페이지 전환 대기 시간을 위해 짧게 딜레이)
               setTimeout(() => {
                 handleRequestPageGuidance();
-              }, 300);
+              }, 1000);
             }
           } else {
             // 도메인 추출 실패 시 현재 URL만 확인
@@ -586,7 +650,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
               if (allCompleted) {
                 setTimeout(() => {
                   handleRequestPageGuidance();
-                }, 300);
+                }, 1000);
               }
             }
           }
@@ -715,7 +779,9 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   }, [pageUrl, plan]);
 
   const currentDomainName = getDomainNameForTitle(selectedDomainUrl);
-  const pageGuidanceTitle = currentDomainName ? `${currentDomainName}에서 할 일` : '이 페이지에서 할 일';
+  const pageGuidanceTitle = currentDomainName
+    ? chrome.i18n.getMessage('guidePageTitleDomain', [currentDomainName])
+    : chrome.i18n.getMessage('guidePageTitle');
 
   return (
     <div className="guide">
@@ -724,7 +790,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         <div className="detected-banner">
           <span className="detected-icon">📍</span>
           <span>
-            지금 <strong>{plan.tools.find(t => t.id === detectedToolId)?.name || detectedToolId}</strong>에 있어요
+            {chrome.i18n.getMessage('guideYouAreOn')} <strong>{plan.tools.find(t => t.id === detectedToolId)?.name || detectedToolId}</strong>{chrome.i18n.getMessage('guideYouAreOnSuffix')}
           </span>
         </div>
       )}
@@ -732,8 +798,8 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
       {/* 전체 진행률: AI 단계 완료 기준 자동 트래킹 + 사이트 링크 (위치: 이 페이지에서 할 일 위) */}
       <div className="guide-progress guide-progress-icons">
         <div className="progress-info">
-          <span className="progress-label">전체 진행률</span>
-          <span className="progress-count">{doneDomains}/{totalDomains} 도메인 완료</span>
+          <span className="progress-label">{chrome.i18n.getMessage('guideProgressLabel')}</span>
+          <span className="progress-count">{doneDomains}/{totalDomains} {chrome.i18n.getMessage('guideDomainsDone')}</span>
         </div>
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${progressPct}%` }} />
@@ -782,7 +848,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                     e.stopPropagation();
                     handleOpenTool(url);
                   }}
-                  title="새 탭에서 열기"
+                  title={chrome.i18n.getMessage('guideOpenNewTab')}
                 >
                   📎
                 </button>
@@ -806,13 +872,13 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
               color: '#856404',
             }}>
               <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
-                ⚠️ 먼저 다음 단계를 완료해주세요
+                ⚠️ {chrome.i18n.getMessage('guideIncompleteTitle')}
               </div>
               <div style={{ marginBottom: '8px' }}>
                 "{incompleteStepMessage.text}"
               </div>
               <div style={{ fontSize: '0.9em', color: '#856404' }}>
-                해당 단계를 완료한 후 다시 시도해주세요.
+                {chrome.i18n.getMessage('guideIncompleteHint')}
               </div>
               <button
                 type="button"
@@ -820,25 +886,25 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                 onClick={() => setIncompleteStepMessage(null)}
                 style={{ marginTop: '8px' }}
               >
-                닫기
+                {chrome.i18n.getMessage('guideClose')}
               </button>
             </div>
           )}
           {!loadingGuide && (
             <button type="button" className="btn-primary btn-guidance-request" onClick={handleRequestPageGuidance}>
-              {pageGuidance?.steps?.length ? '✨ 다음 단계 받기' : '✨ AI 안내 받기'}
+              {pageGuidance?.steps?.length ? '✨ ' + chrome.i18n.getMessage('guideNextStep') : '✨ ' + chrome.i18n.getMessage('guideGetGuidance')}
             </button>
           )}
           {loadingGuide && (
             <div className="page-guidance-loading">
-              <span className="loading-dot" /> 페이지를 분석하고 있어요...
+              <span className="loading-dot" /> {chrome.i18n.getMessage('guideAnalyzing')}
             </div>
           )}
           {pageGuidance?.error && (
             <div className="page-guidance-error">
               <p>{pageGuidance.error}</p>
               <button type="button" className="btn-secondary btn-sm" onClick={handleRequestPageGuidance}>
-                다시 시도
+                {chrome.i18n.getMessage('guideRetry')}
               </button>
             </div>
           )}
@@ -873,28 +939,43 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                           <button
                             type="button"
                             className="btn-spotlight"
-                            onClick={() => handleSpotlight(step)}
+                            onClick={() => handleSpotlight({ ...step, sourceUrl, sourceIndex })}
                           >
-                            📍 위치로 이동
+                            📍 {chrome.i18n.getMessage('guideSpotlight')}
                           </button>
+                        )}
+                        {step.action === 'copy_system_prompt' && plan?.systemPrompt && (
+                          <button
+                            type="button"
+                            className="btn-secondary btn-sm"
+                            onClick={handleCopySystemPrompt}
+                            title={chrome.i18n.getMessage('guideCopyPrompt')}
+                          >
+                            📋 복사
+                          </button>
+                        )}
+                        {step.action === 'copy_system_prompt' && systemPromptCopied && (
+                          <span className="page-guidance-copy-toast">
+                            {chrome.i18n.getMessage('guideCopied')}
+                          </span>
                         )}
                         <button
                           type="button"
                           className={completed ? 'btn-undo btn-sm' : 'btn-done btn-sm'}
                           onClick={() => savePageStepCompletion(sourceUrl, sourceIndex, !completed)}
                         >
-                          {completed ? '되돌리기' : '완료 ✓'}
+                          {completed ? chrome.i18n.getMessage('guideUndo') : chrome.i18n.getMessage('guideDone') + ' ✓'}
                         </button>
                         <button
                           type="button"
                           className="btn-text btn-sm"
                           onClick={() => {
-                            if (confirm('이 단계를 제거하시겠습니까?')) {
+                            if (confirm(chrome.i18n.getMessage('guideConfirmRemove'))) {
                               removeStep(sourceUrl, sourceIndex);
                             }
                           }}
                           style={{ color: '#999', fontSize: '0.85em' }}
-                          title="단계 제거"
+                          title={chrome.i18n.getMessage('guideRemoveStep')}
                         >
                           ✕
                         </button>
@@ -909,7 +990,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                     const sourceUrl = step.sourceUrl || pageUrl;
                     const sourceIndex = step.sourceIndex !== undefined ? step.sourceIndex : idx;
                     return (pageStepCompletions[sourceUrl] && pageStepCompletions[sourceUrl][sourceIndex]) === true;
-                  }).length}/{pageGuidance.steps.length} 완료
+                  }).length}/{pageGuidance.steps.length} {chrome.i18n.getMessage('guideCompleteCount')}
                 </span>
               </div>
             </div>

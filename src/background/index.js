@@ -7,7 +7,7 @@
  * - SPOTLIGHT: selector( content script ) 또는 backendDOMNodeId( CDP DOM.highlightNode )
  */
 
-import { getPageGuidance, getPageChatAnswer } from '../data/ai.js';
+import { getPageGuidance, getPageChatAnswer, getUILocale } from '../data/ai.js';
 import { filterAndSlim } from '../data/axtree.js';
 
 const DEBUGGER_VERSION = '1.3';
@@ -75,14 +75,14 @@ function isSameDomain(url1, url2) {
 async function getAxtreeSlim(tabId) {
   const tab = await chrome.tabs.get(tabId);
   if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-    throw new Error('이 페이지에서는 안내를 받을 수 없습니다. 일반 웹페이지에서 시도해주세요.');
+    throw new Error(chrome.i18n.getMessage('errorNoPage'));
   }
   return new Promise((resolve, reject) => {
     const detach = () => chrome.debugger.detach({ tabId }, () => {});
 
     chrome.debugger.attach({ tabId }, DEBUGGER_VERSION, (err) => {
       if (err) {
-        reject(new Error('페이지 분석 권한이 필요합니다. 확장 프로그램 디버거 권한을 허용해주세요.'));
+        reject(new Error(chrome.i18n.getMessage('errorDebugger')));
         return;
       }
       // CDP: chrome.debugger.sendCommand 콜백은 성공 시 (result) 한 개만 인자로 받음. 에러는 chrome.runtime.lastError.
@@ -94,7 +94,7 @@ async function getAxtreeSlim(tabId) {
           if (chrome.runtime.lastError) {
             console.error('[vibe-guide] Accessibility.getFullAXTree 실패:', chrome.runtime.lastError?.message);
             detach();
-            reject(new Error(chrome.runtime.lastError.message || '접근성 트리를 가져오지 못했습니다.'));
+            reject(new Error(chrome.runtime.lastError.message || chrome.i18n.getMessage('errorAxtree')));
             return;
           }
           const nodes = result?.nodes ?? [];
@@ -122,7 +122,7 @@ async function getPageContext(tabId) {
   // fallback: 스크린샷 (해당 탭을 활성화한 뒤 캡처)
   const tab = await chrome.tabs.get(tabId);
   if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-    throw new Error('이 페이지에서는 안내를 받을 수 없습니다. 일반 웹페이지에서 시도해주세요.');
+    throw new Error(chrome.i18n.getMessage('errorNoPage'));
   }
   const prevActive = await chrome.tabs.query({ active: true, windowId: tab.windowId }).then(tabs => tabs[0]?.id);
   await chrome.tabs.update(tabId, { active: true });
@@ -147,8 +147,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const plan = storage.plan || null;
         const answers = storage.answers || null;
         if (!plan) {
-          return { error: '진행 플랜이 없습니다. 먼저 설문을 완료해주세요.' };
+          return { error: chrome.i18n.getMessage('errorNoPlan') };
         }
+        const tab = await chrome.tabs.get(tabId);
+        const currentUrlFromTab = tab?.url || '';
         let pageContext;
         try {
           pageContext = await getAxtreeSlim(tabId);
@@ -161,7 +163,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         const cache = storage.pageGuidanceCache || {};
         const completions = storage.pageStepCompletions || {};
-        const url = pageContext.url || '';
+        const url = pageContext.url || currentUrlFromTab || '';
 
         const currentDomain = getDomainFromUrl(url);
         const allPreviousSteps = [];
@@ -190,14 +192,63 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const previousStepsForUrl = allPreviousSteps.length > 0
           ? { steps: allPreviousSteps, completed: allCompleted }
           : undefined;
+
+        // Google AI Studio 전용: 하드코딩된 3단계 안내를 "완료"할 때마다 한 단계씩 순차로 노출
+        const hostname = getDomainFromUrl(url);
+        if (hostname === 'aistudio.google.com') {
+          const BASE_STEPS = [
+            {
+              text: '사전 설문에서 만든 웹사이트 아이디어 프롬프트를 복사해서 상단 입력창에 붙여넣으세요.',
+              selector: 'div.prompt-input-wrapper.row.column',
+              action: 'copy_system_prompt',
+            },
+            {
+              text: '입력창 오른쪽의 Build 버튼을 눌러 첫 번째 버전 앱을 생성하세요.',
+              // 상단 툴바의 Build 버튼만 선택
+              // - ms-button 디렉티브 사용
+              // - floating-toggle-button / ifl-button / model-button 변형은 제외
+              selector: 'button[ms-button].mat-mdc-tooltip-trigger.ms-button-primary:not(.floating-toggle-button):not(.ifl-button):not(.model-button)',
+            },
+            {
+              text: '오른쪽 대화창에 수정하고 싶은 내용을 입력한 뒤, "Annotate app" 버튼으로 원하는 부분만 수정해 보세요.',
+              selector: 'button.mat-mdc-tooltip-trigger.annotate-button.ms-button-filter-chip.ng-star-inserted',
+            },
+          ];
+
+          const existingSteps = previousStepsForUrl?.steps || [];
+          const completedFlags = previousStepsForUrl?.completed || [];
+
+          const allDone =
+            existingSteps.length === BASE_STEPS.length &&
+            completedFlags.length === existingSteps.length &&
+            completedFlags.every(Boolean);
+
+          if (allDone) {
+            // 세 단계 모두 완료된 이후에는 빈 배열을 반환 → 프론트에서 "완료되었습니다" 메시지 추가
+            return { steps: [] };
+          }
+
+          const nextIndex = existingSteps.length;
+
+          // 아직 한 번도 단계가 생성되지 않았거나, 모든 생성된 단계를 완료했다면 다음 단계 하나만 추가
+          if (nextIndex < BASE_STEPS.length) {
+            return { steps: [BASE_STEPS[nextIndex]] };
+          }
+
+          // 이론상 도달하지 않지만, 안전하게 더 이상 새 단계가 없음을 알림
+          return { steps: [] };
+        }
+
+        const locale = getUILocale();
         const result = await getPageGuidance(
           { plan, answers, previousStepsForUrl },
           { type: pageContext.type, content: pageContext.content, nodes: pageContext.nodes },
           pageContext.url,
+          locale,
         );
         return result;
       } catch (e) {
-        return { error: e.message || '안내를 불러오는 데 실패했습니다.' };
+        return { error: e.message || chrome.i18n.getMessage('errorGuidanceFailed') };
       }
     })().then(sendResponse);
     return true;
@@ -211,7 +262,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const plan = storage.plan || null;
         const answers = storage.answers || null;
         if (!plan) {
-          return { error: '진행 플랜이 없습니다. 먼저 설문을 완료해주세요.' };
+          return { error: chrome.i18n.getMessage('errorNoPlan') };
         }
 
         let pageContext;
@@ -224,7 +275,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           console.warn('[vibe-guide] GET_PAGE_CHAT_ANSWER: axtree 실패 → URL만 사용. 사유:', msgText, stack);
           const tab = await chrome.tabs.get(tabId);
           if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-            return { error: '이 페이지에서는 채팅을 사용할 수 없습니다. 일반 웹페이지에서 시도해주세요.' };
+            return { error: chrome.i18n.getMessage('errorChatPage') };
           }
           pageContext = { type: 'url', url: tab.url };
         }
@@ -260,12 +311,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ? { steps: allPreviousSteps, completed: allCompleted }
           : undefined;
 
+        const locale = getUILocale();
         const result = await getPageChatAnswer(
           { plan, answers, previousStepsForUrl },
           { type: pageContext.type, nodes: pageContext.nodes },
           url,
           Array.isArray(history) ? history : [],
           userMessage || '',
+          locale,
         );
 
         return { text: result.text };

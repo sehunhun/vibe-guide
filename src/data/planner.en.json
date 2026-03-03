@@ -1,0 +1,98 @@
+{
+  "serviceDescriptions": {
+    "supabase": {
+      "summary": "A backend service that handles database, login, and file storage in one place.",
+      "whyNeeded": "For things like sign-up, login, saving posts and comments, or storing uploaded files—Supabase does it for you. You don't need to build a server."
+    },
+    "stripe": {
+      "summary": "A payment service used to add card and easy payments to your website.",
+      "whyNeeded": "Payments have strict security and legal rules. Using a dedicated service like Stripe is safe and makes it easy to add one-time or subscription payments."
+    },
+    "vercel": {
+      "summary": "A hosting service that puts your site on the internet so anyone can visit it.",
+      "whyNeeded": "Code alone isn't enough—something has to run it. Vercel does that so you can share your site with a single link."
+    },
+    "railway": {
+      "summary": "Hosting that runs your backend server or API on the internet 24/7.",
+      "whyNeeded": "To keep server code running for data processing, scheduling, or notifications, you need a service like Railway instead of leaving your own computer on."
+    },
+    "ga4": {
+      "summary": "Google's visitor analytics tool. See who visited, from where, and which pages.",
+      "whyNeeded": "To improve your site you need to know how many people came and where from. GA4 gives you that in a dashboard."
+    },
+    "resend": {
+      "summary": "A service for sending email from your website.",
+      "whyNeeded": "For welcome emails, password reset, or notifications, you need a reliable sender like Resend so your site can send mail automatically."
+    },
+    "sentry": {
+      "summary": "A monitoring tool that catches and reports errors on your site.",
+      "whyNeeded": "When something breaks, Sentry tells you where and why before users complain, so you can fix it quickly."
+    },
+    "sanity": {
+      "summary": "A headless CMS for managing content like text and images. Edits in the admin show on your site.",
+      "whyNeeded": "For content you want to change later without a developer—blog posts, landing copy, menu names—edit in Sanity and your site loads it."
+    }
+  },
+  "toolRoles": {
+    "google-ai-studio": { "role": "Landing page", "icon": "🤖" },
+    "framer": { "role": "Website builder", "icon": "🎨" },
+    "webflow": { "role": "Website builder", "icon": "🌊" },
+    "bubble": { "role": "App features", "icon": "⚙️" },
+    "bolt": { "role": "AI full-stack", "icon": "⚡" },
+    "cursor": { "role": "AI coding", "icon": "🖱️" },
+    "lovable": { "role": "AI app builder", "icon": "💜" },
+    "softr": { "role": "Membership / portal", "icon": "🧱" },
+    "carrd": { "role": "Quick one-pager", "icon": "📄" },
+    "teachable": { "role": "Content sales", "icon": "🎓" },
+    "notion": { "role": "Notion-based site", "icon": "📝" },
+    "replit": { "role": "AI coding + deploy", "icon": "🔁" },
+    "vercel": { "role": "Deploy & hosting", "icon": "▲" }
+  },
+  "stepTemplates": {
+    "signup": {
+      "title": "Create a $toolName$ account",
+      "desc": "Create a free account on the official $toolName$ site."
+    },
+    "start": {
+      "title": "Get started with $toolName$",
+      "desc": "Create a new project and choose a template."
+    },
+    "socialLogin": {
+      "title": "Set up social login",
+      "desc": "Enable Google/Kakao login and connect your auth keys."
+    },
+    "payment": {
+      "title": "Connect payment",
+      "desc": "Connect Stripe or another payment provider to enable payments."
+    },
+    "email": {
+      "title": "Set up email sending",
+      "desc": "Configure trigger emails like welcome or password reset."
+    },
+    "deploy": {
+      "title": "Deploy and connect domain ($toolName$)",
+      "desc": "Deploy your site and connect your domain."
+    }
+  },
+  "demoSteps": {
+    "googleLanding": {
+      "title": "Build a landing page with Google AI Studio",
+      "desc": "Create your landing page in Google AI Studio."
+    },
+    "vercelDeploy": {
+      "title": "Deploy with Vercel",
+      "desc": "Deploy your site on Vercel."
+    }
+  },
+  "toolStepDesc": "Create an account and connect $toolName$.",
+  "fallbackRole": "Helper tool",
+  "fallbackDesc": "Feature",
+  "systemPrompt": {
+    "intro": "You are a vibe-coding guide agent for non-developers building websites.",
+    "userGoalSection": "## Website the user wants to build",
+    "toolsSection": "## Tools and features to use",
+    "envSection": "## Important: Use environment variables",
+    "envLine": "API keys, secrets, and URLs needed to connect tools must be managed as environment variables. Do not put them directly in code.",
+    "envExample": "Example env vars: "
+  }
+}

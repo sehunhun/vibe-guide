@@ -54,7 +54,7 @@ export default function Chat({ plan, currentTab }) {
     const text = (input || '').trim();
     if (!text || disabled) return;
     if (!currentTab?.tabId) {
-      setError('현재 탭 정보를 불러올 수 없습니다. 일반 웹페이지에서 다시 시도해 주세요.');
+      setError(chrome.i18n.getMessage('chatErrorTab'));
       return;
     }
 
@@ -79,12 +79,12 @@ export default function Chat({ plan, currentTab }) {
       (res) => {
         setLoading(false);
         if (!res || res.error) {
-          setError(res?.error || '채팅 응답을 가져오지 못했어요. 잠시 후 다시 시도해 주세요.');
+          setError(res?.error || chrome.i18n.getMessage('chatErrorLoad'));
           return;
         }
         const answer = (res.text || '').trim();
         if (!answer) {
-          setError('빈 응답을 받았어요. 잠시 후 다시 시도해 주세요.');
+          setError(chrome.i18n.getMessage('chatErrorEmpty'));
           return;
         }
         setMessages(prev => [
@@ -106,8 +106,8 @@ export default function Chat({ plan, currentTab }) {
     <div className="chat">
       <div className="chat-messages">
         <div className="chat-empty">
-          <p>현재 보고 있는 페이지의 버튼, 메뉴, 설정 용어가 헷갈리면 편하게 물어보세요.</p>
-          <p>예: "이 페이지에서 <strong>API</strong>가 무슨 뜻이에요?", "새로운 프로젝트를 시작하려면 어떤 버튼을 눌러야 하나요?"</p>
+          <p>{chrome.i18n.getMessage('chatIntro')}</p>
+          <p>{chrome.i18n.getMessage('chatExample')}</p>
         </div>
 
         {messages.map(m => (
@@ -124,7 +124,7 @@ export default function Chat({ plan, currentTab }) {
         {loading && (
           <div className="chat-message assistant">
             <div className="chat-bubble chat-bubble-loading">
-              생각 중이에요…
+              {chrome.i18n.getMessage('chatThinking')}
             </div>
           </div>
         )}
@@ -141,7 +141,7 @@ export default function Chat({ plan, currentTab }) {
       <div className="chat-input-wrap">
         <textarea
           className="chat-input"
-          placeholder="이 페이지의 버튼/메뉴/설정이 궁금한 점을 적어주세요."
+          placeholder={chrome.i18n.getMessage('chatPlaceholder')}
           value={input}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
@@ -154,7 +154,7 @@ export default function Chat({ plan, currentTab }) {
           onClick={handleSend}
           disabled={disabled || !input.trim()}
         >
-          보내기
+          {chrome.i18n.getMessage('chatSend')}
         </button>
       </div>
     </div>

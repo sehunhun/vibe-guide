@@ -68,17 +68,31 @@ function formatPlan(plan) {
   ].filter(Boolean).join('\n');
 }
 
+/** 브라우저 UI 언어 기준 locale ('en' | 'ko') */
+export function getUILocale() {
+  if (typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getUILanguage) {
+    const lang = chrome.i18n.getUILanguage().toLowerCase();
+    return lang.startsWith('ko') ? 'ko' : 'en';
+  }
+  return 'en';
+}
+
 /**
  * AI용 시스템 + 유저 프롬프트 생성
  * @param {{ plan: object, answers: object, previousStepsForUrl?: { steps: Array<{text,selector?}>, completed: boolean[] } }} context
  * @param {{ type: 'html'|'image', content: string }} pageContext - html 문자열 또는 base64 이미지
  * @param {string} pageUrl
  * @param {string|null} domainGuide - 도메인별 가이드 문서 (마크다운)
+ * @param {string} [locale] - 'en' | 'ko', 응답 언어
  */
-export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
+export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, locale = 'en') {
   const { plan, answers, previousStepsForUrl } = context;
   const answersText = formatSurveySummary(plan, answers);
   const planText = formatPlan(plan);
+
+  const languageRule = locale === 'ko'
+    ? '\n\n**Language**: Respond only in Korean. Use clear, casual Korean where appropriate.'
+    : '\n\n**Language**: Respond only in English.';
 
   const system = `당신은 비개발자를 위한 웹 가이드 어시스턴트입니다.
 **핵심 목표**: 사용자의 설문 응답과 프로젝트 플랜(Step1)을 달성하기 위해, **지금 보고 있는 웹페이지**에서 **다음에 해야 할 하나의 단계**를 UI 단위로 구체적으로 안내해주세요.
@@ -97,7 +111,7 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
 4. **완료 상태 고려**: 이전 단계가 모두 완료되었다면, 그 다음 새로운 단계 하나를 생성하세요. 완료되지 않은 단계가 있다면, 그 단계를 다시 안내하거나 업데이트할 수 있습니다.
 5. **연속된 작업은 하나로 합치기**: "입력하세요"와 "제출하세요"처럼 연속된 작업은 별도 단계로 나누지 말고 하나의 단계로 합쳐서 안내하세요. 예: "입력하고 제출하세요" 또는 "입력 후 제출하세요".
 6. **행동 가능한 단계만 생성**: 실제로 사용자가 수행할 수 있는 인터랙션(클릭, 타이핑, 입력, 선택, 드래그 등)만 단계로 추가하세요. 단순히 "읽기", "확인하기", "보기", "참고하기" 같은 수동적인 행동은 단계로 포함하지 마세요. 예: "버튼을 클릭하세요", "텍스트를 입력하세요", "옵션을 선택하세요" 등.
-7. **선택자**: selector는 document.querySelector()로 찾을 수 있는 유효한 CSS 선택자여야 합니다. id, data 속성, 역할(button, a) 등을 우선 사용하세요. 찾기 어렵거나 해당 없으면 null.`;
+7. **선택자**: selector는 document.querySelector()로 찾을 수 있는 유효한 CSS 선택자여야 합니다. id, data 속성, 역할(button, a) 등을 우선 사용하세요. 찾기 어렵거나 해당 없으면 null.${languageRule}`;
 
   const userParts = [
     `## 설문 요약`,
@@ -191,6 +205,7 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
  * @param {string|null} domainGuide
  * @param {Array<{ role: 'user'|'assistant', text: string }>} history
  * @param {string} userMessage
+ * @param {string} [locale] - 'en' | 'ko'
  */
 export function buildChatPrompt(
   context,
@@ -199,20 +214,24 @@ export function buildChatPrompt(
   domainGuide = null,
   history = [],
   userMessage = '',
+  locale = 'en',
 ) {
   const { plan, answers, previousStepsForUrl } = context;
   const answersText = formatSurveySummary(plan, answers);
   const planText = formatPlan(plan);
 
+  const languageStyle = locale === 'ko'
+    ? '- 가능한 한 쉬운 한국어를 사용하세요.\n- 개발 용어가 나오면 일상적인 비유와 함께 풀어서 설명하세요.\n- 버튼, 메뉴, 입력칸 이름을 그대로 언급하되, 그게 무슨 역할을 하는지 같이 설명하세요.'
+    : '- Use simple English.\n- When technical terms appear, explain them with everyday analogies.\n- Mention button, menu, and input names as shown, and explain what they do.';
+
   const system = [
     '# role',
-    '당신은 웹페이지 내부 요소 및 용어에 대해 설명하는 어시스턴트입니다.',
-    '비개발자도 충분히 이해할 수 있도록 쉬운 용어와 표현으로 대답합니다.',
+    locale === 'ko'
+      ? '당신은 웹페이지 내부 요소 및 용어에 대해 설명하는 어시스턴트입니다. 비개발자도 충분히 이해할 수 있도록 쉬운 용어로 대답합니다.'
+      : 'You are an assistant that explains elements and terms on web pages. Explain in simple terms so non-developers can understand.',
     '',
     '# style',
-    '- 가능한 한 쉬운 한국어를 사용하세요.',
-    '- 개발 용어가 나오면 일상적인 비유와 함께 풀어서 설명하세요.',
-    '- 버튼, 메뉴, 입력칸 이름을 그대로 언급하되, 그게 무슨 역할을 하는지 같이 설명하세요.',
+    languageStyle,
   ].join('\n');
 
   const userParts = [
@@ -283,12 +302,12 @@ const BACKEND_URL = 'https://vibe-guide-production.up.railway.app';
  * @param {string} userAnswer - "어떤 웹사이트를 만들고 싶으신가요?" 답변
  * @returns {Promise<{ tools: Array<{ id: number, description: string, requirements: string[] }> }>}
  */
-export async function getSurveyTools(backendUrl, userAnswer) {
+export async function getSurveyTools(backendUrl, userAnswer, locale = 'en') {
   const baseUrl = (backendUrl || BACKEND_URL).trim().replace(/\/$/, '');
   const res = await fetch(`${baseUrl}/api/survey-tools`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_answer: userAnswer }),
+    body: JSON.stringify({ user_answer: userAnswer, locale: locale === 'ko' ? 'ko' : 'en' }),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -323,7 +342,10 @@ export function getStoredAISettings() {
  */
 async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl, pageUrl = '', slimNodes = null) {
   if (!backendUrl || !backendUrl.trim()) {
-    throw new Error('백엔드 서버 URL을 설정해주세요.');
+    const msg = typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getMessage
+      ? chrome.i18n.getMessage('errorBackendUrl')
+      : 'Please set the backend server URL in settings.';
+    throw new Error(msg);
   }
 
   const baseUrl = backendUrl.trim().replace(/\/$/, '');
@@ -400,14 +422,19 @@ async function callChatBackend(backendUrl, modelId, messages) {
   return { text: data.text || '' };
 }
 
-/** 파싱 실패 시 반환하는 고정 메시지 (재시도 판별용) */
-const PARSE_FAILURE_MESSAGE = '안내를 생성하지 못했습니다. 다시 시도해 주세요.';
+/** 파싱 실패 시 사용자에게 보여줄 메시지 (i18n) */
+function getParseFailureMessage() {
+  return typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getMessage
+    ? chrome.i18n.getMessage('parseFailureMessage') || 'Could not generate guidance. Please try again.'
+    : 'Could not generate guidance. Please try again.';
+}
 
 /** 파싱 실패 fallback 결과인지 여부 */
 function isParseFailureResult(result) {
+  const msg = getParseFailureMessage();
   return (
     result?.steps?.length === 1 &&
-    result.steps[0]?.text === PARSE_FAILURE_MESSAGE &&
+    result.steps[0]?.text === msg &&
     result.steps[0]?.selector === null
   );
 }
@@ -450,7 +477,7 @@ function parseAIResponse(raw) {
     console.error('[vibe-guide] 원문:', raw);
   }
   // 파싱 실패 시 원문(raw)을 노출하지 않고 고정 메시지 반환
-  return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
+  return { steps: [{ text: getParseFailureMessage(), selector: null }] };
 }
 
 /**
@@ -467,20 +494,25 @@ export function hasValidApiKey() {
  * @param {{ plan: object, answers: object }} context
  * @param {{ type: 'html'|'image', content: string }} pageContext
  * @param {string} pageUrl
+ * @param {string} [locale] - 'en' | 'ko', 응답 언어 (생략 시 getUILocale())
  * @returns {Promise<{ steps: Array<{ text: string, selector: string|null }> }>}
  */
-export async function getPageGuidance(context, pageContext, pageUrl) {
+export async function getPageGuidance(context, pageContext, pageUrl, locale) {
+  const loc = locale ?? getUILocale();
   const { modelId, backendUrl } = await getStoredAISettings();
   
   if (!backendUrl || !backendUrl.trim()) {
-    throw new Error('설정에서 백엔드 서버 URL을 입력해주세요.');
+    const msg = typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getMessage
+      ? chrome.i18n.getMessage('errorBackendUrl')
+      : 'Please set the backend server URL in settings.';
+    throw new Error(msg);
   }
 
   // 도메인별 가이드 문서 로드 (프롬프트 캐싱을 위해)
   const domainId = getDomainIdFromUrl(pageUrl);
   const domainGuide = domainId ? await getDomainGuide(domainId) : null;
 
-  const messages = buildPrompt(context, pageContext, pageUrl, domainGuide);
+  const messages = buildPrompt(context, pageContext, pageUrl, domainGuide, loc);
   const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
   const slimNodes = pageContext.type === 'axtree' ? pageContext.nodes : null;
 
@@ -506,7 +538,7 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
     }
   }
 
-  return { steps: [{ text: PARSE_FAILURE_MESSAGE, selector: null }] };
+  return { steps: [{ text: getParseFailureMessage(), selector: null }] };
 }
 
 /**
@@ -519,17 +551,21 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
  * @param {string} userMessage
  * @returns {Promise<{ text: string }>}
  */
-export async function getPageChatAnswer(context, pageContext, pageUrl, history = [], userMessage = '') {
+export async function getPageChatAnswer(context, pageContext, pageUrl, history = [], userMessage = '', locale) {
+  const loc = locale ?? getUILocale();
   const { modelId, backendUrl } = await getStoredAISettings();
 
   if (!backendUrl || !backendUrl.trim()) {
-    throw new Error('설정에서 백엔드 서버 URL을 입력해주세요.');
+    const msg = typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getMessage
+      ? chrome.i18n.getMessage('errorBackendUrl')
+      : 'Please set the backend server URL in settings.';
+    throw new Error(msg);
   }
 
   const domainId = getDomainIdFromUrl(pageUrl);
   const domainGuide = domainId ? await getDomainGuide(domainId) : null;
 
-  const messages = buildChatPrompt(context, pageContext, pageUrl, domainGuide, history, userMessage);
+  const messages = buildChatPrompt(context, pageContext, pageUrl, domainGuide, history, userMessage, loc);
 
   const result = await callChatBackend(backendUrl, modelId, messages);
   return result;

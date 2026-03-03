@@ -85,13 +85,17 @@ class SurveyToolItem(BaseModel):
 
 class SurveyToolsRequest(BaseModel):
     user_answer: str
+    locale: str = "en"  # "en" | "ko" — AI가 description을 반환할 언어
 
 
 class SurveyToolsResponse(BaseModel):
     tools: List[SurveyToolItem]
 
 
-SURVEY_TOOLS_SYSTEM = """# role
+def _survey_tools_system(locale: str) -> str:
+    lang = "ko" if locale and locale.lower().startswith("ko") else "en"
+    if lang == "ko":
+        return """# role
 넌 비개발자 대상 웹사이트 바이브 코딩 가이드야.
 
 # tools
@@ -101,6 +105,15 @@ db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email
 # job
 사용자가 요청한 웹사이트 제작에 꼭 필요한 필수적인 기능들을 아래와 같은 json 형식으로 반환해야 해. 위 tools를 최대한 활용해서 누락되는 요구 사항이 없도록 해.
 반드시 tools 배열만 반환하고, 각 항목은 id(1부터 순번), description(한글 도구 설명), requirements(위 도구 이름 중 필요한 것만 문자열 배열)를 가진다."""
+    return """# role
+You are a vibe-coding guide for non-developers building websites.
+
+# tools
+You may only use these tools: db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
+
+# job
+Return only the required features for the user's requested website as a json with a "tools" array. Use the tools above so nothing is missed.
+Each item must have: id (1-based index), description (short tool/feature description in English only), requirements (array of tool names from the list above)."""
 
 # axtree 모드: AI 응답 구조 (response_format)
 GUIDANCE_AXTREE_JSON_SCHEMA = {
@@ -401,7 +414,7 @@ async def get_survey_tools(request: SurveyToolsRequest):
             json={
                 "model": "gpt-4o-mini",
                 "messages": [
-                    {"role": "system", "content": SURVEY_TOOLS_SYSTEM},
+                    {"role": "system", "content": _survey_tools_system(getattr(request, "locale", "en") or "en")},
                     {"role": "user", "content": user_content},
                 ],
                 "max_tokens": 1024,
@@ -435,12 +448,14 @@ async def get_survey_tools(request: SurveyToolsRequest):
         raise HTTPException(status_code=500, detail=f"AI 응답 JSON 파싱 실패: {e}")
 
     tools = parsed.get("tools") or []
+    locale = (getattr(request, "locale", None) or "en").lower()
+    fallback_desc = "Feature" if locale.startswith("en") else "기능"
     out = []
     for t in tools:
         reqs = [r for r in (t.get("requirements") or []) if r in ALLOWED_REQUIREMENTS]
         out.append(SurveyToolItem(
             id=int(t.get("id", 0)),
-            description=(t.get("description") or "").strip() or "기능",
+            description=(t.get("description") or "").strip() or fallback_desc,
             requirements=reqs,
         ))
     return SurveyToolsResponse(tools=out)

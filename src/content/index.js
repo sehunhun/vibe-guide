@@ -13,6 +13,9 @@ const MAX_HTML_LEN = 35000;
 /** 스포트라이트 제거 시 추가 정리(리스너 해제, data 속성 제거 등) */
 let _spotlightCleanup = null;
 
+/** wrapper 생성 중복 방지: 한 번에 하나만 감싸기 */
+let _spotlightWrapLock = false;
+
 function reportUrl() {
   chrome.runtime.sendMessage({
     type: 'URL_CHANGED',
@@ -49,29 +52,54 @@ function unwrapSpotlight() {
   return true;
 }
 
-/** 스포트라이트 제거 */
+/** 스포트라이트 제거 (wrapper가 여러 개 쌓여 있어도 전부 제거) */
 function removeSpotlight() {
+  _spotlightWrapLock = false;
   if (_spotlightCleanup) {
     _spotlightCleanup();
     _spotlightCleanup = null;
   }
-  if (unwrapSpotlight()) return true;
+  let removed = false;
+  while (unwrapSpotlight()) removed = true;
   const id = 'vibe-guide-spotlight';
   const el = document.getElementById(id);
   if (el) {
     el.remove();
-    return true;
+    removed = true;
   }
-  return false;
+  return removed;
 }
 
-/** 셀렉터로 요소 찾아 wrapper로 감싸기 (vibe-guide-spotlight div 생성 없음) */
+/** 셀렉터로 요소 찾아 wrapper로 감싸기 (스크롤해도 요소와 함께 움직임, wrapper 1개만 유지) */
 function wrapElementBySelector(selector) {
   const el = document.querySelector(selector);
-  if (!el) return { ok: false, error: '요소를 찾을 수 없습니다.' };
+  if (!el) return { ok: false, error: chrome.i18n.getMessage('errorElementNotFound') };
+
+  // 이미 같은 스포트라이트 wrapper 안에 있으면 추가로 감싸지 않고 스크롤만
+  if (el.closest('#vibe-guide-spotlight-wrapper')) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return { ok: true };
+  }
+
+  // 연속 클릭 시 중복 wrapper 방지: 이미 다른 요소를 감싸는 중이면 스크롤만
+  if (_spotlightWrapLock) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return { ok: true };
+  }
+  _spotlightWrapLock = true;
+
+  // 기존 스포트라이트 전부 제거 (중복 wrapper 정리)
+  while (document.getElementById('vibe-guide-spotlight-wrapper')) {
+    unwrapSpotlight();
+  }
+  if (_spotlightCleanup) {
+    _spotlightCleanup();
+    _spotlightCleanup = null;
+  }
+  const existingOverlay = document.getElementById('vibe-guide-spotlight');
+  if (existingOverlay) existingOverlay.remove();
 
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  removeSpotlight();
 
   const wrapper = document.createElement('div');
   wrapper.id = 'vibe-guide-spotlight-wrapper';
@@ -80,7 +108,15 @@ function wrapElementBySelector(selector) {
   el.parentNode.insertBefore(wrapper, el);
   wrapper.appendChild(el);
 
-  const clickHandler = () => {
+  const clickHandler = (event) => {
+    try {
+      const target = event?.target;
+      if (wrapper && target && wrapper.contains(target)) {
+        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' });
+      }
+    } catch (e) {
+      // ignore
+    }
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
   };
@@ -95,7 +131,7 @@ function wrapElementBySelector(selector) {
 /** 셀렉터로 요소 찾아 fixed overlay + scroll/resize 시마다 위치 갱신 (backendDOMNodeId → selector 경로용) */
 function spotlightBySelector(selector) {
   const el = document.querySelector(selector);
-  if (!el) return { ok: false, error: '요소를 찾을 수 없습니다.' };
+  if (!el) return { ok: false, error: chrome.i18n.getMessage('errorElementNotFound') };
 
   removeSpotlight();
 
@@ -129,7 +165,15 @@ function spotlightBySelector(selector) {
     _spotlightCleanup = null;
   };
 
-  const clickHandler = () => {
+  const clickHandler = (event) => {
+    try {
+      const target = event?.target;
+      if (el && target && el.contains(target)) {
+        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' });
+      }
+    } catch (e) {
+      // ignore
+    }
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
   };
@@ -214,7 +258,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.type === 'SPOTLIGHT_WRAP_DONE') {
     console.log('[vibe-guide] 스포트라이트: backendDOMNodeId 분기 (CDP에서 이미 wrap됨, 해제만 등록)');
-    const clickHandler = () => {
+    const clickHandler = (event) => {
+      try {
+        const wrapper = document.getElementById('vibe-guide-spotlight-wrapper');
+        const target = event?.target;
+        if (wrapper && target && wrapper.contains(target)) {
+          chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' });
+        }
+      } catch (e) {
+        // ignore
+      }
       removeSpotlight();
       document.removeEventListener('click', clickHandler, true);
     };

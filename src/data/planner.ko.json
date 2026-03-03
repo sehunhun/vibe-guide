@@ -1,0 +1,98 @@
+{
+  "serviceDescriptions": {
+    "supabase": {
+      "summary": "데이터베이스, 로그인, 파일 저장을 한 곳에서 처리하는 백엔드 서비스예요.",
+      "whyNeeded": "회원가입·로그인, 게시글·댓글 저장, 업로드한 파일 보관처럼 \"서버에 뭔가 저장해야 하는\" 기능은 Supabase가 대신 해줘요. 직접 서버를 만들 필요가 없어요."
+    },
+    "stripe": {
+      "summary": "카드·간편결제를 웹사이트에 붙일 때 쓰는 결제 대행 서비스예요.",
+      "whyNeeded": "결제는 보안·법 규정이 까다로워서, 전문 서비스(Stripe)를 쓰는 게 안전해요. 상품/정기구독 결제를 쉽게 넣을 수 있어요."
+    },
+    "vercel": {
+      "summary": "만든 웹사이트를 인터넷에 올려 누구나 접속할 수 있게 해주는 호스팅 서비스예요.",
+      "whyNeeded": "코드만 있으면 되는 게 아니라 \"어디선가 계속 돌아가게\" 해야 해요. Vercel이 그 역할을 해줘서, 링크 하나로 사이트를 공개할 수 있어요."
+    },
+    "railway": {
+      "summary": "백엔드 서버나 API를 인터넷에 올려서 24시간 돌아가게 해주는 호스팅이에요.",
+      "whyNeeded": "데이터 처리·예약·알림 같은 일을 하는 서버 코드를 안정적으로 켜 두려면 Railway 같은 서비스가 필요해요. 직접 컴퓨터를 켜 둘 필요가 없어요."
+    },
+    "ga4": {
+      "summary": "Google에서 제공하는 방문자 분석 도구예요. 누가, 어디서, 어떤 페이지를 봤는지 볼 수 있어요.",
+      "whyNeeded": "사이트를 개선하려면 \"몇 명이 왔는지, 어디서 유입됐는지\"를 알아야 해요. GA4를 붙이면 대시보드에서 한눈에 볼 수 있어요."
+    },
+    "resend": {
+      "summary": "웹사이트에서 이메일을 보낼 때 쓰는 발송 서비스예요.",
+      "whyNeeded": "가입 환영 메일, 비밀번호 찾기, 알림 메일처럼 \"사이트가 자동으로 메일을 보내는\" 기능을 안정적으로 쓰려면 Resend 같은 서비스가 필요해요."
+    },
+    "sentry": {
+      "summary": "사이트에서 발생한 오류를 자동으로 잡아서 알려주는 모니터링 도구예요.",
+      "whyNeeded": "문제가 생겨도 사용자가 직접 문의하기 전에 \"어디서, 왜\" 터졌는지 알 수 있어요. 빠르게 수정할 수 있어요."
+    },
+    "sanity": {
+      "summary": "글·이미지 같은 콘텐츠를 관리하는 헤드리스 CMS예요. 관리 화면에서 수정하면 사이트에 반영돼요.",
+      "whyNeeded": "블로그, 랜딩 문구, 메뉴 이름처럼 \"개발자 없이도 나중에 바꾸고 싶은\" 내용을 Sanity에서 편집하고, 사이트는 그걸 불러와서 보여줄 수 있어요."
+    }
+  },
+  "toolRoles": {
+    "google-ai-studio": { "role": "랜딩페이지 제작", "icon": "🤖" },
+    "framer": { "role": "웹사이트 제작", "icon": "🎨" },
+    "webflow": { "role": "웹사이트 제작", "icon": "🌊" },
+    "bubble": { "role": "앱 기능 구현", "icon": "⚙️" },
+    "bolt": { "role": "AI 풀스택 생성", "icon": "⚡" },
+    "cursor": { "role": "AI 코딩 환경", "icon": "🖱️" },
+    "lovable": { "role": "AI 앱 빌더", "icon": "💜" },
+    "softr": { "role": "멤버십/포털 제작", "icon": "🧱" },
+    "carrd": { "role": "빠른 원페이지", "icon": "📄" },
+    "teachable": { "role": "콘텐츠 판매", "icon": "🎓" },
+    "notion": { "role": "노션 기반 사이트", "icon": "📝" },
+    "replit": { "role": "AI 코딩+배포", "icon": "🔁" },
+    "vercel": { "role": "배포 & 호스팅", "icon": "▲" }
+  },
+  "stepTemplates": {
+    "signup": {
+      "title": "$toolName$ 계정 만들기",
+      "desc": "$toolName$ 공식 사이트에서 무료 계정을 생성하세요."
+    },
+    "start": {
+      "title": "$toolName$ 시작하기",
+      "desc": "새 프로젝트를 생성하고 템플릿을 선택하세요."
+    },
+    "socialLogin": {
+      "title": "소셜 로그인 설정",
+      "desc": "구글/카카오 로그인을 활성화하고 인증 키를 연결하세요."
+    },
+    "payment": {
+      "title": "결제 시스템 연결",
+      "desc": "스트라이프 또는 토스페이먼츠를 연결해 결제를 활성화하세요."
+    },
+    "email": {
+      "title": "이메일 발송 설정",
+      "desc": "회원가입 환영 메일 등 트리거 이메일을 설정하세요."
+    },
+    "deploy": {
+      "title": "$toolName$ 배포 및 도메인 연결",
+      "desc": "완성된 사이트를 배포하고 도메인을 연결하세요."
+    }
+  },
+  "demoSteps": {
+    "googleLanding": {
+      "title": "Google AI Studio에서 랜딩페이지 제작",
+      "desc": "Google AI Studio로 랜딩페이지를 만드세요."
+    },
+    "vercelDeploy": {
+      "title": "Vercel로 배포",
+      "desc": "Vercel에서 사이트를 배포하세요."
+    }
+  },
+  "toolStepDesc": "$toolName$ 사이트에서 계정을 만들고 연결하세요.",
+  "fallbackRole": "보조 도구",
+  "fallbackDesc": "기능",
+  "systemPrompt": {
+    "intro": "당신은 비개발자를 위한 웹사이트 바이브 코딩 가이드 에이전트입니다.",
+    "userGoalSection": "## 사용자가 만들고 싶은 웹사이트",
+    "toolsSection": "## 사용할 도구 및 기능",
+    "envSection": "## 중요: 환경변수 사용",
+    "envLine": "도구들과 기능을 연결하기 위해 필요한 API 키, 시크릿, URL 등은 반드시 환경변수로 관리하세요. 코드에 직접 넣지 마세요.",
+    "envExample": "필요한 환경변수 예: "
+  }
+}

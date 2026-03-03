@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
-const AI_MODELS = [
-  { id: 'gpt-4o', label: 'GPT-4o', desc: '가장 똑똑함, 비용 중간' },
-  { id: 'gpt-4o-mini', label: 'GPT-4o mini', desc: '빠르고 저렴함' },
-];
+function getAIModels() {
+  return [
+    { id: 'gpt-4o', label: chrome.i18n.getMessage('modelGpt4o'), desc: chrome.i18n.getMessage('modelGpt4oDesc') },
+    { id: 'gpt-4o-mini', label: chrome.i18n.getMessage('modelGpt4oMini'), desc: chrome.i18n.getMessage('modelGpt4oMiniDesc') },
+  ];
+}
 
 export default function Settings({ onBack }) {
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
@@ -25,15 +27,15 @@ export default function Settings({ onBack }) {
   return (
     <div className="settings">
       <div className="settings-header">
-        <button className="btn-back" onClick={onBack}>← 돌아가기</button>
-        <h2>AI 설정</h2>
+        <button className="btn-back" onClick={onBack}>← {chrome.i18n.getMessage('settingsBack')}</button>
+        <h2>{chrome.i18n.getMessage('settingsTitle')}</h2>
       </div>
 
       <div className="settings-section">
-        <h3>AI 모델 선택</h3>
-        <p className="settings-desc">가이드를 생성할 때 사용할 AI 모델을 선택하세요</p>
+        <h3>{chrome.i18n.getMessage('settingsModelTitle')}</h3>
+        <p className="settings-desc">{chrome.i18n.getMessage('settingsModelDesc')}</p>
         <div className="model-list">
-          {AI_MODELS.map(model => (
+          {getAIModels().map(model => (
             <button
               key={model.id}
               className={`model-option ${selectedModel === model.id ? 'selected' : ''}`}
@@ -53,7 +55,7 @@ export default function Settings({ onBack }) {
       </div>
 
       <button className={`btn-primary btn-save ${saved ? 'saved' : ''}`} onClick={handleSave}>
-        {saved ? '저장됐어요 ✓' : '저장하기'}
+        {saved ? chrome.i18n.getMessage('settingsSaved') + ' ✓' : chrome.i18n.getMessage('settingsSave')}
       </button>
     </div>
   );

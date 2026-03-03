@@ -3,8 +3,11 @@ import Survey from './Survey.jsx';
 import Guide from './Guide.jsx';
 import Chat from './Chat.jsx';
 import Settings from './Settings.jsx';
-import { storage } from '../data/planner.js';
-import { hasValidApiKey } from '../data/ai.js';
+import { storage, setPlannerLocale } from '../data/planner.js';
+import { hasValidApiKey, getUILocale } from '../data/ai.js';
+
+// 첫 렌더 전에 브라우저 UI 언어로 planner 로케일 맞춤 (서비스 설명 등)
+if (typeof getUILocale === 'function') setPlannerLocale(getUILocale());
 
 // 화면 종류: 'survey' | 'guide' | 'settings'
 export default function App() {
@@ -14,6 +17,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('plan'); // 'plan' | 'chat'
   // 가이드 진입 시 API 키 유효 여부 (null=미확인, true/false)
   const [apiKeyValid, setApiKeyValid] = useState(null);
+
+  // 브라우저 UI 언어에 맞춰 planner(서비스 설명 등) 로케일 동기화
+  useEffect(() => {
+    setPlannerLocale(getUILocale());
+  }, []);
 
   // 초기 로드: plan 있으면 guide, 없으면 설문은 탭에서만 (사이드패널에는 awaiting_survey)
   useEffect(() => {
@@ -122,7 +130,7 @@ export default function App() {
             <button
               className="btn-icon"
               onClick={() => setScreen(s => s === 'settings' ? 'guide' : 'settings')}
-              title="설정"
+              title={chrome.i18n.getMessage('appSettings')}
             >
               ⚙️
             </button>
@@ -137,29 +145,29 @@ export default function App() {
         )}
         {screen === 'awaiting_survey' && (
           <div className="awaiting-survey">
-            <p className="awaiting-survey-text">설문을 새 탭에서 진행해 주세요.</p>
-            <p className="awaiting-survey-hint">완료 후 <strong>가이드 시작하기</strong>를 누르면, 확장 프로그램 아이콘을 클릭해 여기서 가이드를 볼 수 있어요.</p>
+            <p className="awaiting-survey-text">{chrome.i18n.getMessage('awaitingSurveyText')}</p>
+            <p className="awaiting-survey-hint">{chrome.i18n.getMessage('awaitingSurveyHint')}</p>
             <button
               type="button"
               className="btn-primary"
               onClick={() => chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' })}
             >
-              설문 탭 열기
+              {chrome.i18n.getMessage('openSurveyTab')}
             </button>
           </div>
         )}
         {screen === 'guide' && apiKeyValid === null && (
           <div className="loading guide-key-check">
             <div className="loading-spinner" />
-            <p className="guide-key-check-text">설정 확인 중...</p>
+            <p className="guide-key-check-text">{chrome.i18n.getMessage('checkingSettings')}</p>
           </div>
         )}
         {screen === 'guide' && apiKeyValid === false && (
           <div className="guide-key-required">
-            <p className="guide-key-required-title">🔑 백엔드 서버 URL이 필요해요</p>
-            <p className="guide-key-required-desc">AI 안내를 사용하려면 설정에서 백엔드 서버 URL을 입력해주세요.</p>
+            <p className="guide-key-required-title">🔑 {chrome.i18n.getMessage('backendRequiredTitle')}</p>
+            <p className="guide-key-required-desc">{chrome.i18n.getMessage('backendRequiredDesc')}</p>
             <button type="button" className="btn-primary" onClick={() => setScreen('settings')}>
-              설정에서 백엔드 URL 입력하기
+              {chrome.i18n.getMessage('openSettingsBackend')}
             </button>
           </div>
         )}
@@ -171,14 +179,14 @@ export default function App() {
                 className={`guide-tab-btn ${activeTab === 'plan' ? 'active' : ''}`}
                 onClick={() => setActiveTab('plan')}
               >
-                진행 플랜
+                {chrome.i18n.getMessage('tabPlan')}
               </button>
               <button
                 type="button"
                 className={`guide-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
                 onClick={() => setActiveTab('chat')}
               >
-                채팅
+                {chrome.i18n.getMessage('tabChat')}
               </button>
             </div>
             {activeTab === 'plan' ? (

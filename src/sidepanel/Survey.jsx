@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
-import { getSurveyTools, getStoredAISettings } from '../data/ai.js';
+import { getSurveyTools, getStoredAISettings, getUILocale } from '../data/ai.js';
 import {
   storage,
   getUniqueServicesFromSelectedTools,
   buildSurveyPayload,
   buildRequirementObjects,
   REQUIREMENT_TO_SERVICE,
-  SERVICE_DESCRIPTIONS,
+  getPlannerMessages,
 } from '../data/planner.js';
-
-const SINGLE_QUESTION = '어떤 웹사이트를 만들고 싶으신가요?';
 
 export default function Survey({ onComplete }) {
   const [step, setStep] = useState(0);
@@ -27,10 +25,10 @@ export default function Survey({ onComplete }) {
     setSubmitLoading(true);
     try {
       const { backendUrl } = await getStoredAISettings();
-      const res = await getSurveyTools(backendUrl, text);
+      const res = await getSurveyTools(backendUrl, text, getUILocale());
       const tools = res.tools || [];
       if (tools.length === 0) {
-        setError('추천 도구를 찾지 못했어요. 조금 더 구체적으로 적어주시겠어요?');
+        setError(chrome.i18n.getMessage('surveyErrorNoTools'));
         return;
       }
       setAiTools(tools);
@@ -38,7 +36,7 @@ export default function Survey({ onComplete }) {
       setSelectedToolIds(new Set());
       setStep(1);
     } catch (e) {
-      setError(e.message || '도구 추천을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
+      setError(e.message || chrome.i18n.getMessage('surveyErrorLoad'));
     } finally {
       setSubmitLoading(false);
     }
@@ -64,10 +62,10 @@ export default function Survey({ onComplete }) {
       selectedTools: selected,
     });
     await storage.savePlan(payload);
-    const firstUrl = payload.steps?.[0]?.url || payload.tools?.[0]?.url;
-    if (firstUrl && chrome.tabs) {
+    const aiStudioUrl = 'https://aistudio.google.com/apps';
+    if (chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) chrome.tabs.update(tabs[0].id, { url: firstUrl });
+        if (tabs[0]?.id) chrome.tabs.update(tabs[0].id, { url: aiStudioUrl });
       });
     }
     onComplete(payload);
@@ -90,13 +88,13 @@ export default function Survey({ onComplete }) {
         <>
           <div className="survey-question">
             <div className="question-emoji">🌐</div>
-            <h2 className="question-title">{SINGLE_QUESTION}</h2>
-            <p className="question-hint">예: 랜딩페이지, 쇼핑몰, 블로그, 회원제 서비스 등</p>
+            <h2 className="question-title">{chrome.i18n.getMessage('surveyQuestion1')}</h2>
+            <p className="question-hint">{chrome.i18n.getMessage('surveyHint1')}</p>
           </div>
           <div className="survey-text-wrap">
             <textarea
               className="survey-textarea"
-              placeholder="원하는 웹사이트를 자유롭게 적어주세요."
+              placeholder={chrome.i18n.getMessage('surveyPlaceholder')}
               value={siteGoal}
               onChange={e => setSiteGoal(e.target.value)}
               rows={3}
@@ -111,8 +109,8 @@ export default function Survey({ onComplete }) {
         <>
           <div className="survey-question">
             <div className="question-emoji">⚙️</div>
-            <h2 className="question-title">필요한 기능을 선택해주세요</h2>
-            <p className="question-hint">해당되는 것 모두 선택</p>
+            <h2 className="question-title">{chrome.i18n.getMessage('surveyTitleFeatures')}</h2>
+            <p className="question-hint">{chrome.i18n.getMessage('surveyHintFeatures')}</p>
           </div>
           <div className="survey-options">
             {aiTools.map(tool => {
@@ -141,13 +139,13 @@ export default function Survey({ onComplete }) {
         <>
           <div className="survey-question">
             <div className="question-emoji">✅</div>
-            <h2 className="question-title">선택한 서비스</h2>
-            <p className="question-hint">도구를 누르면 설명이 펼쳐져요</p>
+            <h2 className="question-title">{chrome.i18n.getMessage('surveyTitleServices')}</h2>
+            <p className="question-hint">{chrome.i18n.getMessage('surveyHintServices')}</p>
           </div>
           <div className="services-summary-list">
             {uniqueServices.map(s => {
               const isOpen = expandedServiceId === s.id;
-              const desc = SERVICE_DESCRIPTIONS[s.id];
+              const desc = getPlannerMessages().serviceDescriptions[s.id];
               const descriptions = requirementObjects
                 .filter(ro => REQUIREMENT_TO_SERVICE[ro.requirement]?.id === s.id)
                 .flatMap(ro => ro.descriptions || []);
@@ -169,7 +167,7 @@ export default function Survey({ onComplete }) {
                       )}
                       {descriptions.length > 0 && (
                         <p className="service-desc-list">
-                          <strong>이번에 쓰는 이유:</strong> {[...new Set(descriptions)].join(', ')}
+                          <strong>{chrome.i18n.getMessage('surveyReasonLabel')}</strong> {[...new Set(descriptions)].join(', ')}
                         </p>
                       )}
                       {desc?.whyNeeded && (
@@ -182,7 +180,7 @@ export default function Survey({ onComplete }) {
             })}
           </div>
           <button className="btn-primary btn-start-inline" onClick={handleGuideStart}>
-            가이드 시작하기 🚀
+            {chrome.i18n.getMessage('surveyBtnStart')} 🚀
           </button>
         </>
       )}
@@ -194,21 +192,21 @@ export default function Survey({ onComplete }) {
             disabled={!siteGoal.trim() || submitLoading}
             onClick={handleNext}
           >
-            {submitLoading ? '추천 받는 중…' : '다음 →'}
+            {submitLoading ? chrome.i18n.getMessage('surveyBtnLoading') : chrome.i18n.getMessage('surveyBtnNext') + ' →'}
           </button>
         ) : step === 1 ? (
           <>
-            <button className="btn-secondary" onClick={() => setStep(0)}>← 이전</button>
+            <button className="btn-secondary" onClick={() => setStep(0)}>← {chrome.i18n.getMessage('surveyBtnPrev')}</button>
             <button
               className="btn-primary"
               disabled={selectedToolIds.size === 0}
               onClick={handleNextFromCheckboxes}
             >
-              다음 →
+              {chrome.i18n.getMessage('surveyBtnNext')} →
             </button>
           </>
         ) : (
-          <button className="btn-secondary" onClick={() => setStep(1)}>← 이전</button>
+          <button className="btn-secondary" onClick={() => setStep(1)}>← {chrome.i18n.getMessage('surveyBtnPrev')}</button>
         )}
       </div>
     </div>
