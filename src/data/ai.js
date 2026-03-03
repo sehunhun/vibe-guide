@@ -184,8 +184,9 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
  * 채팅용 시스템 + 유저 프롬프트 생성
  * - 같은 컨텍스트(설문 요약, 프로젝트 플랜, 현재 페이지 URL, 이전 단계)를 사용하되
  * - 웹페이지 내부 요소/용어를 비개발자도 이해하기 쉽게 설명하는 역할에 맞게 구성
- * - Chat 탭은 HTML/이미지 컨텍스트를 사용하지 않고, URL/플랜/단계 정보 + 대화 히스토리만 활용
+ * - 단계 생성 AI처럼 axtree slim JSON을 함께 전달해, 페이지 요소 맥락을 참고할 수 있게 함
  * @param {{ plan: object, answers: object, previousStepsForUrl?: { steps: Array<{text,selector?}>, completed: boolean[] } }} context
+ * @param {{ type: 'axtree'|'url'|string, nodes?: Array<object> }} pageContext
  * @param {string} pageUrl
  * @param {string|null} domainGuide
  * @param {Array<{ role: 'user'|'assistant', text: string }>} history
@@ -193,6 +194,7 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null) {
  */
 export function buildChatPrompt(
   context,
+  pageContext,
   pageUrl,
   domainGuide = null,
   history = [],
@@ -238,6 +240,17 @@ export function buildChatPrompt(
       return `${i + 1}) ${s.text} ${status}`;
     });
     userParts.push('## 이 페이지에 대해 지금까지 안내된 단계', lines.join('\n'));
+  }
+
+  // axtree slim 노드가 있으면 JSON으로 함께 제공
+  if (pageContext?.type === 'axtree' && Array.isArray(pageContext.nodes) && pageContext.nodes.length > 0) {
+    userParts.push(
+      '## 현재 페이지 상호작용 요소 목록 (slim JSON)',
+      '아래 JSON은 이 페이지에서 상호작용 가능한 UI 요소들의 슬림 목록입니다. 요소 이름과 역할을 설명할 때 참고만 하세요.',
+      '```json',
+      JSON.stringify(pageContext.nodes, null, 2),
+      '```',
+    );
   }
 
   if (Array.isArray(history) && history.length > 0) {
@@ -498,14 +511,15 @@ export async function getPageGuidance(context, pageContext, pageUrl) {
 
 /**
  * 채팅용 AI 호출 (background에서 사용)
- * - Chat 탭은 HTML/이미지 컨텍스트를 사용하지 않고, URL/플랜/단계 정보 + 대화 히스토리만 활용
+ * - 단계 생성 AI와 동일하게 axtree slim JSON을 함께 사용 (가능한 경우)
  * @param {{ plan: object, answers: object, previousStepsForUrl?: { steps: Array<{text,selector?}>, completed: boolean[] } }} context
+ * @param {{ type: 'axtree'|'url'|string, nodes?: Array<object> }} pageContext
  * @param {string} pageUrl
  * @param {Array<{ role: 'user'|'assistant', text: string }>} history
  * @param {string} userMessage
  * @returns {Promise<{ text: string }>}
  */
-export async function getPageChatAnswer(context, pageUrl, history = [], userMessage = '') {
+export async function getPageChatAnswer(context, pageContext, pageUrl, history = [], userMessage = '') {
   const { modelId, backendUrl } = await getStoredAISettings();
 
   if (!backendUrl || !backendUrl.trim()) {
@@ -515,7 +529,7 @@ export async function getPageChatAnswer(context, pageUrl, history = [], userMess
   const domainId = getDomainIdFromUrl(pageUrl);
   const domainGuide = domainId ? await getDomainGuide(domainId) : null;
 
-  const messages = buildChatPrompt(context, pageUrl, domainGuide, history, userMessage);
+  const messages = buildChatPrompt(context, pageContext, pageUrl, domainGuide, history, userMessage);
 
   const result = await callChatBackend(backendUrl, modelId, messages);
   return result;

@@ -595,6 +595,44 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     });
   }, [handleRequestPageGuidance, pageUrl]);
 
+  // AI가 새 단계를 생성해 제공했을 때(또는 다음 미완료 단계가 생겼을 때) 자동으로 "위치로 이동" 실행
+  const lastAutoSpotlightRef = useRef({ key: null, index: null });
+
+  useEffect(() => {
+    if (!currentTab?.tabId) return;
+    if (!pageUrl) return;
+    // 아직 AI 안내를 불러오는 중이면 대기
+    if (loadingGuideUrl) return;
+
+    const nextIncomplete = findFirstIncompleteStep();
+    if (!nextIncomplete || !nextIncomplete.step) return;
+
+    const domainKey = getDomainFromUrl(pageUrl) || pageUrl || 'unknown';
+    const last = lastAutoSpotlightRef.current;
+
+    // 같은 도메인/URL에서 이미 스포트라이트한 단계라면 다시 실행하지 않음
+    if (last.key === domainKey && last.index === nextIncomplete.globalIndex) {
+      return;
+    }
+
+    // 실제로 이동 가능한 단계만 자동 실행 (selector 또는 backendDOMNodeId가 있는 경우)
+    const step = nextIncomplete.step;
+    const hasSelector = !!step.selector;
+    const hasBackendId = step.backendDOMNodeId != null && Number.isFinite(Number(step.backendDOMNodeId));
+    if (!hasSelector && !hasBackendId) return;
+
+    handleSpotlight(step);
+    lastAutoSpotlightRef.current = { key: domainKey, index: nextIncomplete.globalIndex };
+  }, [
+    currentTab?.tabId,
+    pageUrl,
+    loadingGuideUrl,
+    guidanceByUrl,
+    pageStepCompletions,
+    findFirstIncompleteStep,
+    handleSpotlight,
+  ]);
+
   if (!plan) return null;
 
   // 같은 도메인의 모든 단계를 합쳐서 표시

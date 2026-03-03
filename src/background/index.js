@@ -214,11 +214,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           return { error: '진행 플랜이 없습니다. 먼저 설문을 완료해주세요.' };
         }
 
-        const tab = await chrome.tabs.get(tabId);
-        const url = tab?.url || '';
-        if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
-          return { error: '이 페이지에서는 채팅을 사용할 수 없습니다. 일반 웹페이지에서 시도해주세요.' };
+        let pageContext;
+        try {
+          pageContext = await getAxtreeSlim(tabId);
+          console.log('[vibe-guide] GET_PAGE_CHAT_ANSWER: axtree 사용 → slim JSON 포함');
+        } catch (e) {
+          const msgText = e?.message ?? String(e);
+          const stack = e?.stack ? `\n${e.stack}` : '';
+          console.warn('[vibe-guide] GET_PAGE_CHAT_ANSWER: axtree 실패 → URL만 사용. 사유:', msgText, stack);
+          const tab = await chrome.tabs.get(tabId);
+          if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+            return { error: '이 페이지에서는 채팅을 사용할 수 없습니다. 일반 웹페이지에서 시도해주세요.' };
+          }
+          pageContext = { type: 'url', url: tab.url };
         }
+
+        const url = pageContext.url || '';
 
         const cache = storage.pageGuidanceCache || {};
         const completions = storage.pageStepCompletions || {};
@@ -251,6 +262,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         const result = await getPageChatAnswer(
           { plan, answers, previousStepsForUrl },
+          { type: pageContext.type, nodes: pageContext.nodes },
           url,
           Array.isArray(history) ? history : [],
           userMessage || '',

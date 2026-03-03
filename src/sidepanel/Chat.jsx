@@ -15,6 +15,23 @@ export default function Chat({ plan, currentTab }) {
 
   const disabled = !currentTab?.tabId || !plan || loading;
 
+   // 초기 로드시 이전 채팅 불러오기
+  useEffect(() => {
+    if (!chrome?.storage?.local) return;
+    chrome.storage.local.get(['chatMessages'], (r) => {
+      const saved = r.chatMessages;
+      if (Array.isArray(saved) && saved.length > 0) {
+        setMessages(saved);
+      }
+    });
+  }, []);
+
+  // 메시지 변경 시 저장
+  useEffect(() => {
+    if (!chrome?.storage?.local) return;
+    chrome.storage.local.set({ chatMessages: messages });
+  }, [messages]);
+
   useEffect(() => {
     if (!bottomRef.current) return;
     bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -88,12 +105,10 @@ export default function Chat({ plan, currentTab }) {
   return (
     <div className="chat">
       <div className="chat-messages">
-        {messages.length === 0 && !loading && (
-          <div className="chat-empty">
-            <p>현재 보고 있는 페이지의 버튼, 메뉴, 설정 용어가 헷갈리면 편하게 물어보세요.</p>
-            <p>예: "이 페이지에서 <strong>프로젝트</strong>는 무슨 뜻이에요?", "오른쪽 위 톱니바퀴 아이콘이 뭔가요?"</p>
-          </div>
-        )}
+        <div className="chat-empty">
+          <p>현재 보고 있는 페이지의 버튼, 메뉴, 설정 용어가 헷갈리면 편하게 물어보세요.</p>
+          <p>예: "이 페이지에서 <strong>API</strong>가 무슨 뜻이에요?", "새로운 프로젝트를 시작하려면 어떤 버튼을 눌러야 하나요?"</p>
+        </div>
 
         {messages.map(m => (
           <div
