@@ -2,26 +2,39 @@
  * 도메인별 가이드 문서
  * 각 도메인에 대한 가이드 문서를 마크다운 형식으로 저장
  * AI 프롬프트 생성 시 참고 자료로 사용됨
+ * 규칙: guides/{domainId}.md 파일만 추가하면 됨 (guides.js 수정 불필요)
  */
 
-// 가이드 문서를 정적 import (webpack의 raw-loader가 처리)
-import googleAiStudioGuide from './guides/google-ai-studio.md';
-import demoGuide from './guides/demo-guide.md';
-
 /**
- * 도메인 ID에 해당하는 가이드 문서 반환
- * @param {string} domainId - 도메인 ID (예: 'google-ai-studio')
+ * 도메인 ID에 해당하는 가이드 문서 반환 (동적 import)
+ * @param {string} domainId - 도메인 ID (예: 'google-ai-studio') → guides/{domainId}.md
  * @returns {Promise<string|null>} 가이드 문서 마크다운 또는 null
  */
 export async function getDomainGuide(domainId) {
+  if (!domainId || typeof domainId !== 'string') return null;
   try {
-    const guides = {
-      'google-ai-studio': googleAiStudioGuide,
-      // 다른 가이드도 여기에 추가
-    };
-    return guides[domainId] || null;
-  } catch (err) {
-    console.error('[vibe-guide] 가이드 문서 로드 실패:', err);
+    const mod = await import(
+      /* webpackChunkName: "guide-[request]" */
+      `./guides/${domainId}.md`
+    );
+    return mod.default ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 데모 모드용 가이드 문서 반환 (동적 import)
+ * @returns {Promise<string|null>}
+ */
+export async function getDemoGuide() {
+  try {
+    const mod = await import(
+      /* webpackChunkName: "guide-demo" */
+      './guides/demo-guide.md'
+    );
+    return mod.default ?? null;
+  } catch {
     return null;
   }
 }

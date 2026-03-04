@@ -193,7 +193,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           ? { steps: allPreviousSteps, completed: allCompleted }
           : undefined;
 
-        // Google AI Studio 전용: 하드코딩된 3단계 안내 (로케일별 문구 적용)
+        // Google AI Studio 전용: 하드코딩된 6단계 안내 (로케일별 문구 적용)
         const hostname = getDomainFromUrl(url);
         if (hostname === 'aistudio.google.com') {
           const BASE_STEPS = [
@@ -208,6 +208,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             },
             {
               text: chrome.i18n.getMessage('aiStudioStep3'),
+              selector: 'span[class="material-symbols-outlined notranslate ms-button-icon-symbol ng-star-inserted"]',
+            },
+            {
+              text: chrome.i18n.getMessage('aiStudioStep4'),
+              selector: 'button[data-view="4"]',
+            },
+            {
+              text: chrome.i18n.getMessage('aiStudioStep5'),
+              selector: 'button[aria-label="Add secret"]',
+            },
+            {
+              text: chrome.i18n.getMessage('aiStudioStep6'),
               selector: 'button.mat-mdc-tooltip-trigger.annotate-button.ms-button-filter-chip.ng-star-inserted',
             },
           ];
@@ -221,7 +233,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             completedFlags.every(Boolean);
 
           if (allDone) {
-            // 세 단계 모두 완료된 이후에는 빈 배열을 반환 → 프론트에서 "완료되었습니다" 메시지 추가
+            // 모든 단계 완료 후 빈 배열 반환 → 프론트에서 "완료되었습니다" 메시지 추가
             return { steps: [] };
           }
 

@@ -4,9 +4,8 @@
  */
 
 import { QUESTIONS } from './tools.js';
-import { getDomainGuide, getDomainIdFromUrl } from './guides.js';
+import { getDomainGuide, getDomainIdFromUrl, getDemoGuide } from './guides.js';
 import { PLAN_MODE } from './planner.js';
-import demoGuide from './guides/demo-guide.md';
 
 const MAX_HTML_LEN = 30000; // 토큰 절감용
 
@@ -84,8 +83,9 @@ export function getUILocale() {
  * @param {string} pageUrl
  * @param {string|null} domainGuide - 도메인별 가이드 문서 (마크다운)
  * @param {string} [locale] - 'en' | 'ko', 응답 언어
+ * @param {string|null} [demoGuideContent] - 데모 모드일 때 사용할 가이드 문서
  */
-export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, locale = 'en') {
+export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, locale = 'en', demoGuideContent = null) {
   const { plan, answers, previousStepsForUrl } = context;
   const answersText = formatSurveySummary(plan, answers);
   const planText = formatPlan(plan);
@@ -135,12 +135,12 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
   }
 
   // 데모 모드일 때 데모 가이드 추가 (반드시 참고해야 함)
-  if (PLAN_MODE === 'demo') {
+  if (demoGuideContent) {
     userParts.push(
       `## ⚠️ 데모 버전 필수 가이드 (반드시 참고)`,
       `다음은 데모 버전에서 반드시 따라야 하는 단계별 가이드입니다. 이 가이드의 순서를 정확히 따르고, 각 단계를 순서대로 안내해주세요.`,
       '',
-      demoGuide,
+      demoGuideContent,
       '',
       '**매우 중요**: 위 데모 가이드의 단계들을 정확히 순서대로 안내해주세요. 사용자가 현재 페이지에서 수행해야 할 단계가 가이드에 명시되어 있다면, 그 단계를 정확히 안내하세요. 가이드에 나와있는 버튼 이름, 메뉴 이름, 입력 칸 이름 등을 정확히 사용하세요.'
     );
@@ -547,11 +547,13 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
     throw new Error(msg);
   }
 
-  // 도메인별 가이드 문서 로드 (프롬프트 캐싱을 위해)
   const domainId = getDomainIdFromUrl(pageUrl);
-  const domainGuide = domainId ? await getDomainGuide(domainId) : null;
+  const [domainGuide, demoGuideContent] = await Promise.all([
+    domainId ? getDomainGuide(domainId) : null,
+    PLAN_MODE === 'demo' ? getDemoGuide() : null,
+  ]);
 
-  const messages = buildPrompt(context, pageContext, pageUrl, domainGuide, loc);
+  const messages = buildPrompt(context, pageContext, pageUrl, domainGuide, loc, demoGuideContent ?? undefined);
   const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
   const slimNodes = pageContext.type === 'axtree' ? pageContext.nodes : null;
 

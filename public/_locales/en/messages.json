@@ -90,5 +90,8 @@
 
   "aiStudioStep1": { "message": "Copy the website idea prompt from the survey and paste it into the top input." },
   "aiStudioStep2": { "message": "Click the Build button to the right of the input to generate the first version of the app." },
-  "aiStudioStep3": { "message": "Enter what you want to change in the chat on the right, then use the Annotate app button to modify specific parts." }
+  "aiStudioStep3": { "message": "Click the Settings button." },
+  "aiStudioStep4": { "message": "Click the Secrets button." },
+  "aiStudioStep5": { "message": "Click Add secret to get API keys for each page." },
+  "aiStudioStep6": { "message": "Enter what you want to change in the chat on the right, then use the Annotate app button to modify specific parts." }
 }

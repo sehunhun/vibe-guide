@@ -90,5 +90,8 @@
 
   "aiStudioStep1": { "message": "사전 설문에서 만든 웹사이트 아이디어 프롬프트를 복사해서 상단 입력창에 붙여넣으세요." },
   "aiStudioStep2": { "message": "입력창 오른쪽의 Build 버튼을 눌러 첫 번째 버전 앱을 생성하세요." },
-  "aiStudioStep3": { "message": "오른쪽 대화창에 수정하고 싶은 내용을 입력한 뒤, \"Annotate app\" 버튼으로 원하는 부분만 수정해 보세요." }
+  "aiStudioStep3": { "message": "설정 버튼을 클릭하세요." },
+  "aiStudioStep4": { "message": "Secrets 버튼을 클릭하세요." },
+  "aiStudioStep5": { "message": "Add secret 버튼을 클릭하여 각 페이지별 키 값을 가져오세요." },
+  "aiStudioStep6": { "message": "오른쪽 대화창에 수정하고 싶은 내용을 입력한 뒤, \"Annotate app\" 버튼으로 원하는 부분만 수정해 보세요." }
 }
