@@ -96,24 +96,33 @@ def _survey_tools_system(locale: str) -> str:
     lang = "ko" if locale and locale.lower().startswith("ko") else "en"
     if lang == "ko":
         return """# role
-넌 비개발자 대상 웹사이트 바이브 코딩 가이드야.
+넌 비개발자가 웹사이트를 만들 때 쓰는 가이드야.
 
-# tools
-너가 쓸 수 있는 도구는 오직 아래와 같다.
+# tools (내부 식별자, 사용자에게 노출하지 않음)
 db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
 
+# description 작성 규칙 (매우 중요)
+- description은 반드시 **비즈니스·도메인 용어**로 써. 개발 용어(DB, API, 호스팅, 프론트엔드, 백엔드, headless CMS 등)를 쓰지 말 것.
+- "무엇을 할 수 있게 되는지", "사용자/운영자 입장에서의 가치"로 표현할 것.
+- 예: db → "회원·데이터 저장", payment → "결제 받기", login → "로그인·회원가입", storage → "파일·이미지 저장", frontend-hosting → "웹사이트 배포·공개", analytics → "방문자·이용 현황 확인", email → "이메일 발송(가입 환영, 알림)", headless-cms → "콘텐츠(글·메뉴) 관리"
+
 # job
-사용자가 요청한 웹사이트 제작에 꼭 필요한 필수적인 기능들을 아래와 같은 json 형식으로 반환해야 해. 위 tools를 최대한 활용해서 누락되는 요구 사항이 없도록 해.
-반드시 tools 배열만 반환하고, 각 항목은 id(1부터 순번), description(한글 도구 설명), requirements(위 도구 이름 중 필요한 것만 문자열 배열)를 가진다."""
+사용자가 요청한 웹사이트 제작에 꼭 필요한 기능만 골라서 tools 배열로 반환해. 위 tools를 최대한 활용해서 누락 없이.
+각 항목: id(1부터 순번), description(한글, 비개발자가 이해하는 비즈니스·도메인 표현), requirements(위 도구 이름 중 필요한 것만 문자열 배열)."""
     return """# role
-You are a vibe-coding guide for non-developers building websites.
+You are a guide for non-developers building websites.
 
-# tools
-You may only use these tools: db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
+# tools (internal IDs only; do not expose to the user)
+db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email, monitoring, headless-cms
+
+# description rules (critical)
+- Write description in **business and domain language** only. Do not use developer jargon (DB, API, hosting, frontend, backend, headless CMS, etc.).
+- Phrase each item as what the user can do or the value they get (outcome-oriented, user-facing).
+- Examples: db → "Store members and data", payment → "Accept payments", login → "Sign up and log in", storage → "Store files and images", frontend-hosting → "Publish your website", analytics → "See visitors and usage", email → "Send emails (welcome, notifications)", headless-cms → "Manage content (posts, menus)".
 
 # job
-Return only the required features for the user's requested website as a json with a "tools" array. Use the tools above so nothing is missed.
-Each item must have: id (1-based index), description (short tool/feature description in English only), requirements (array of tool names from the list above)."""
+Return only the features required for the user's requested website as a json with a "tools" array. Use the tools above so nothing is missed.
+Each item: id (1-based index), description (short, in English, business/domain wording for non-developers), requirements (array of tool names from the list above)."""
 
 # axtree 모드: AI 응답 구조 (response_format)
 GUIDANCE_AXTREE_JSON_SCHEMA = {
@@ -399,10 +408,21 @@ async def get_survey_tools(request: SurveyToolsRequest):
     except ValueError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    user_content = (
-        f"사용자 답변: {request.user_answer.strip() or '알 수 없음'}\n\n"
-        "위 답변을 바탕으로 해당 웹사이트 제작에 꼭 필요한 기능만 골라서 tools 배열을 반환해."
-    )
+    locale = (getattr(request, "locale", None) or "en").lower()
+    is_ko = locale.startswith("ko")
+    user_answer = request.user_answer.strip() or ("알 수 없음" if is_ko else "Not specified")
+    if is_ko:
+        user_content = (
+            f"사용자 답변: {user_answer}\n\n"
+            "위 답변을 바탕으로 해당 웹사이트 제작에 꼭 필요한 기능만 골라서 tools 배열을 반환해. "
+            "각 항목의 description은 반드시 비개발자가 이해하기 쉬운 비즈니스·도메인 용어로만 써줘(개발 용어 사용 금지)."
+        )
+    else:
+        user_content = (
+            f"User answer: {user_answer}\n\n"
+            "From this answer, return a tools array with only the features needed to build that website. "
+            "Write each description in business/domain language that non-developers understand (no developer jargon)."
+        )
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         response = await client.post(
@@ -448,8 +468,7 @@ async def get_survey_tools(request: SurveyToolsRequest):
         raise HTTPException(status_code=500, detail=f"AI 응답 JSON 파싱 실패: {e}")
 
     tools = parsed.get("tools") or []
-    locale = (getattr(request, "locale", None) or "en").lower()
-    fallback_desc = "Feature" if locale.startswith("en") else "기능"
+    fallback_desc = "Feature" if not locale.startswith("ko") else "기능"
     out = []
     for t in tools:
         reqs = [r for r in (t.get("requirements") or []) if r in ALLOWED_REQUIREMENTS]

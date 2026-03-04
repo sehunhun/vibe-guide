@@ -37,28 +37,32 @@ export function getDomainIdFromUrl(url) {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     
-    // Guide.jsx의 TOOL_DOMAINS와 매칭
+    // Guide.jsx의 TOOL_DOMAINS와 매칭 (manifest 도메인 목록과 동기화)
     const domainMap = {
+      'n8n.io': 'n8n',
+      'manus.ai': 'manus',
+      'stitch.withgoogle.com': 'google-stitch',
       'aistudio.google.com': 'google-ai-studio',
-      'github.com': 'github',
-      'framer.com': 'framer',
-      'webflow.com': 'webflow',
-      'webflow.io': 'webflow',
-      'bubble.io': 'bubble',
-      'bolt.new': 'bolt',
-      'stackblitz.com': 'bolt',
-      'cursor.sh': 'cursor',
-      'cursor.com': 'cursor',
-      'lovable.dev': 'lovable',
-      'gptengineer.app': 'lovable',
-      'softr.io': 'softr',
-      'carrd.co': 'carrd',
-      'teachable.com': 'teachable',
-      'notion.so': 'notion',
-      'notion.site': 'notion',
-      'super.so': 'notion',
-      'replit.com': 'replit',
+      'supabase.com': 'supabase',
+      'firebase.google.com': 'firebase',
+      'stripe.com': 'stripe',
+      'paypal.com': 'paypal',
+      'www.paypal.com': 'paypal',
+      'tosspayments.com': 'tosspayments',
+      'www.tosspayments.com': 'tosspayments',
+      'clerk.com': 'clerk',
+      'aws.amazon.com': 'aws-s3',
       'vercel.com': 'vercel',
+      'railway.app': 'railway',
+      'render.com': 'render',
+      'analytics.google.com': 'ga4',
+      'posthog.com': 'posthog',
+      'resend.com': 'resend',
+      'sentry.io': 'sentry',
+      'sanity.io': 'sanity',
+      'www.sanity.io': 'sanity',
+      'strapi.io': 'strapi',
+      'github.com': 'github',
     };
     
     // 정확히 일치하는 도메인 확인

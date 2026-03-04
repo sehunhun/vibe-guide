@@ -1,19 +1,29 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { storage } from '../data/planner.js';
 
-// 툴 공식 도메인 매핑
+// 툴 공식 도메인 매핑 (manifest content_scripts.matches와 동기화)
 const TOOL_DOMAINS = {
-  framer:    ['framer.com'],
-  webflow:   ['webflow.com', 'webflow.io'],
-  bubble:    ['bubble.io'],
-  bolt:      ['bolt.new', 'stackblitz.com'],
-  cursor:    ['cursor.sh', 'cursor.com'],
-  lovable:   ['lovable.dev', 'gptengineer.app'],
-  softr:     ['softr.io'],
-  carrd:     ['carrd.co'],
-  teachable: ['teachable.com'],
-  notion:    ['notion.so', 'notion.site', 'super.so'],
-  replit:    ['replit.com'],
+  n8n: ['n8n.io'],
+  manus: ['manus.ai'],
+  'google-stitch': ['stitch.withgoogle.com'],
+  'google-ai-studio': ['aistudio.google.com'],
+  supabase: ['supabase.com'],
+  firebase: ['firebase.google.com'],
+  stripe: ['stripe.com'],
+  paypal: ['paypal.com', 'www.paypal.com'],
+  tosspayments: ['tosspayments.com', 'www.tosspayments.com'],
+  clerk: ['clerk.com'],
+  'aws-s3': ['aws.amazon.com'],
+  vercel: ['vercel.com'],
+  railway: ['railway.app'],
+  render: ['render.com'],
+  ga4: ['analytics.google.com'],
+  posthog: ['posthog.com'],
+  resend: ['resend.com'],
+  sentry: ['sentry.io'],
+  sanity: ['sanity.io', 'www.sanity.io'],
+  strapi: ['strapi.io'],
+  github: ['github.com'],
 };
 
 function detectTool(hostname) {
