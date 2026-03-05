@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-
-/**
- * Chat 탭
- * - 현재 플랜/페이지 컨텍스트를 활용해서
- *   웹페이지 내부 요소와 용어를 비개발자 친화적으로 설명하는 채팅 UI
- */
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent } from '../components/ui/card.jsx';
+import { cn } from '../lib/utils.js';
 
 export default function Chat({ plan, currentTab }) {
   const [messages, setMessages] = useState([]);
@@ -26,18 +23,14 @@ export default function Chat({ plan, currentTab }) {
 
   const disabled = !currentTab?.tabId || !plan || loading;
 
-   // 초기 로드시 이전 채팅 불러오기
   useEffect(() => {
     if (!chrome?.storage?.local) return;
     chrome.storage.local.get(['chatMessages'], (r) => {
       const saved = r.chatMessages;
-      if (Array.isArray(saved) && saved.length > 0) {
-        setMessages(saved);
-      }
+      if (Array.isArray(saved) && saved.length > 0) setMessages(saved);
     });
   }, []);
 
-  // 메시지 변경 시 저장
   useEffect(() => {
     if (!chrome?.storage?.local) return;
     chrome.storage.local.set({ chatMessages: messages });
@@ -53,10 +46,7 @@ export default function Chat({ plan, currentTab }) {
   }
 
   function buildHistoryWithNewUserMessage(userText) {
-    const history = messages.map(m => ({
-      role: m.role,
-      text: m.text,
-    }));
+    const history = messages.map(m => ({ role: m.role, text: m.text }));
     history.push({ role: 'user', text: userText });
     return history;
   }
@@ -68,25 +58,15 @@ export default function Chat({ plan, currentTab }) {
       setError(chrome.i18n.getMessage('chatErrorTab'));
       return;
     }
-
     setError(null);
     setInput('');
-    const nextMessages = [
-      ...messages,
-      { id: Date.now(), role: 'user', text },
-    ];
+    const nextMessages = [...messages, { id: Date.now(), role: 'user', text }];
     setMessages(nextMessages);
     setLoading(true);
-
     const history = buildHistoryWithNewUserMessage(text);
 
     chrome.runtime.sendMessage(
-      {
-        type: 'GET_PAGE_CHAT_ANSWER',
-        tabId: currentTab.tabId,
-        history,
-        userMessage: text,
-      },
+      { type: 'GET_PAGE_CHAT_ANSWER', tabId: currentTab.tabId, history, userMessage: text },
       (res) => {
         setLoading(false);
         if (!res || res.error) {
@@ -98,11 +78,8 @@ export default function Chat({ plan, currentTab }) {
           setError(chrome.i18n.getMessage('chatErrorEmpty'));
           return;
         }
-        setMessages(prev => [
-          ...prev,
-          { id: Date.now() + 1, role: 'assistant', text: answer },
-        ]);
-      },
+        setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', text: answer }]);
+      }
     );
   }
 
@@ -114,29 +91,43 @@ export default function Chat({ plan, currentTab }) {
   }
 
   return (
-    <div className="chat">
-      <div className="chat-messages">
-        <div className="chat-empty">
-          <p>{chrome.i18n.getMessage('chatIntro')}</p>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
+          <p className="mb-1">{chrome.i18n.getMessage('chatIntro')}</p>
           <p>{chrome.i18n.getMessage('chatExample')}</p>
         </div>
 
         {messages.map(m => (
           <div
             key={m.id}
-            className={`chat-message ${m.role === 'assistant' ? 'assistant' : 'user'}`}
+            className={cn(
+              'flex flex-col',
+              m.role === 'user' ? 'items-end' : 'items-start'
+            )}
           >
-            <div className="chat-bubble">
-              {renderTextWithLineBreaks(m.text)}
-            </div>
+            <Card
+              className={cn(
+                'max-w-[90%]',
+                m.role === 'user'
+                  ? 'border-primary/30 bg-primary/10'
+                  : 'bg-muted/50'
+              )}
+            >
+              <CardContent className="px-3 py-2 text-xs leading-relaxed">
+                {renderTextWithLineBreaks(m.text)}
+              </CardContent>
+            </Card>
           </div>
         ))}
 
         {loading && (
-          <div className="chat-message assistant">
-            <div className="chat-bubble chat-bubble-loading">
-              {chrome.i18n.getMessage('chatThinking')}
-            </div>
+          <div className="flex flex-col items-start">
+            <Card className="bg-muted/50">
+              <CardContent className="px-3 py-2 text-xs text-muted-foreground">
+                {chrome.i18n.getMessage('chatThinking')}
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -144,14 +135,14 @@ export default function Chat({ plan, currentTab }) {
       </div>
 
       {error && (
-        <div className="chat-error">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
         </div>
       )}
 
-      <div className="chat-input-wrap">
+      <div className="flex shrink-0 items-end gap-2">
         <textarea
-          className="chat-input"
+          className="min-h-[44px] w-full flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50"
           placeholder={chrome.i18n.getMessage('chatPlaceholder')}
           value={input}
           onChange={handleChange}
@@ -159,16 +150,15 @@ export default function Chat({ plan, currentTab }) {
           rows={2}
           disabled={disabled}
         />
-        <button
-          type="button"
-          className="chat-send-btn"
+        <Button
+          size="default"
           onClick={handleSend}
           disabled={disabled || !input.trim()}
+          className="shrink-0"
         >
           {chrome.i18n.getMessage('chatSend')}
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
-

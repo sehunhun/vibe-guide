@@ -170,6 +170,22 @@ SURVEY_TOOLS_JSON_SCHEMA = {
 }
 
 
+def _extract_output_text_from_responses_api(data: dict) -> str:
+    """
+    OpenAI Responses API 응답에서 마지막 assistant 메시지의 output_text를 추출합니다.
+    output 항목에 web_search_call, message 등이 순서대로 올 수 있으므로
+    type="message" 이고 role="assistant"인 항목 중 마지막 것의 텍스트를 반환합니다.
+    """
+    output = data.get("output") or []
+    text = ""
+    for item in output:
+        if item.get("type") == "message" and item.get("role") == "assistant":
+            for block in item.get("content") or []:
+                if block.get("type") == "output_text" and block.get("text"):
+                    text = block.get("text", "").strip()
+    return text
+
+
 @app.get("/")
 async def root():
     return {"message": "Vibe Guide API", "status": "ok"}
@@ -203,39 +219,38 @@ async def get_guidance(request: GuidanceRequest):
                 + json.dumps(request.slim_nodes, ensure_ascii=False, indent=2)
             )
 
-        content = [{"type": "text", "text": user_content}]
+        # Responses API 입력 형식 (system + user 메시지, web_search 도구 사용)
+        user_content_items = [{"type": "input_text", "text": user_content}]
         if request.page_context_type == "image" and request.page_context_content:
             image_url = request.page_context_content
             if not image_url.startswith("data:"):
                 image_url = f"data:image/png;base64,{image_url}"
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": image_url}
-            })
+            user_content_items.append({"type": "input_image", "image_url": image_url})
             logger.info("이미지 포함됨")
 
         payload = {
             "model": request.model,
-            "messages": [
-                {"role": "system", "content": request.system},
-                {"role": "user", "content": content},
+            "input": [
+                {"role": "system", "content": [{"type": "input_text", "text": request.system}]},
+                {"role": "user", "content": user_content_items},
             ],
-            "max_tokens": 2048,
+            "tools": [{"type": "web_search"}],
+            "max_output_tokens": 2048,
         }
         if use_axtree:
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
+            payload["text"] = {
+                "format": {
+                    "type": "json_schema",
                     "name": "guidance_steps",
-                    "strict": True,
                     "schema": GUIDANCE_AXTREE_JSON_SCHEMA,
-                },
+                    "strict": True,
+                }
             }
 
-        logger.info("OpenAI API 호출 시작")
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        logger.info("OpenAI Responses API 호출 시작 (web_search 도구 사용)")
+        async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                "https://api.openai.com/v1/responses",
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {api_key}",
@@ -258,7 +273,7 @@ async def get_guidance(request: GuidanceRequest):
                 )
 
             data = response.json()
-            raw = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            raw = _extract_output_text_from_responses_api(data)
 
             if not raw:
                 logger.error("OpenAI API가 빈 응답을 반환했습니다.")

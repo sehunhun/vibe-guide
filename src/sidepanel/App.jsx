@@ -3,27 +3,24 @@ import Survey from './Survey.jsx';
 import Guide from './Guide.jsx';
 import Chat from './Chat.jsx';
 import Settings from './Settings.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs.jsx';
 import { storage, setPlannerLocale } from '../data/planner.js';
 import { hasValidApiKey, getUILocale } from '../data/ai.js';
 
-// 첫 렌더 전에 브라우저 UI 언어로 planner 로케일 맞춤 (서비스 설명 등)
 if (typeof getUILocale === 'function') setPlannerLocale(getUILocale());
 
-// 화면 종류: 'survey' | 'guide' | 'settings'
 export default function App() {
-  const [screen, setScreen] = useState(null); // null = 로딩중
+  const [screen, setScreen] = useState(null);
   const [plan, setPlan] = useState(null);
   const [currentTab, setCurrentTab] = useState(null);
-  const [activeTab, setActiveTab] = useState('plan'); // 'plan' | 'chat'
-  // 가이드 진입 시 API 키 유효 여부 (null=미확인, true/false)
+  const [activeTab, setActiveTab] = useState('plan');
   const [apiKeyValid, setApiKeyValid] = useState(null);
 
-  // 브라우저 UI 언어에 맞춰 planner(서비스 설명 등) 로케일 동기화
   useEffect(() => {
     setPlannerLocale(getUILocale());
   }, []);
 
-  // 초기 로드: plan 있으면 guide, 없으면 설문은 탭에서만 (사이드패널에는 awaiting_survey)
   useEffect(() => {
     storage.getPlan().then(savedPlan => {
       if (savedPlan) {
@@ -36,37 +33,25 @@ export default function App() {
     });
   }, []);
 
-  // 다른 탭(설문/가이드 페이지)에서 plan이 저장·삭제되었을 때 사이드패널 화면 자동 전환
   useEffect(() => {
     if (!chrome?.storage?.onChanged) return;
-
     const handleStorageChange = (changes, areaName) => {
       if (areaName !== 'local') return;
       if (!changes.plan) return;
-
       const nextPlan = changes.plan.newValue || null;
       setPlan(nextPlan);
-
-      if (nextPlan) {
-        // 새 플랜이 생기면 자동으로 가이드 화면으로 전환
-        setScreen('guide');
-      } else {
-        // 플랜이 삭제되면 다시 설문 대기 화면으로 전환
-        setScreen('awaiting_survey');
-      }
+      if (nextPlan) setScreen('guide');
+      else setScreen('awaiting_survey');
     };
-
     chrome.storage.onChanged.addListener(handleStorageChange);
     return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, []);
 
-  // 가이드 화면일 때 API 키 확인 (설정에서 돌아왔을 때도 재확인)
   useEffect(() => {
     if (screen !== 'guide') return;
     hasValidApiKey().then(setApiKeyValid);
   }, [screen]);
 
-  // Background → sidePanel: 탭 변경 이벤트 수신
   useEffect(() => {
     const handler = (msg) => {
       if (msg.type === 'TAB_CHANGED') {
@@ -77,7 +62,6 @@ export default function App() {
     return () => chrome.runtime.onMessage.removeListener(handler);
   }, []);
 
-  // 현재 탭 초기값 가져오기
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs[0];
@@ -101,7 +85,7 @@ export default function App() {
   const handleReset = async () => {
     await storage.clearAll();
     setPlan(null);
-    setScreen('awaiting_survey'); // 사이드패널에는 설문 안 띄움, 전체화면 탭에서만 진행
+    setScreen('awaiting_survey');
     chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' });
   };
 
@@ -111,100 +95,132 @@ export default function App() {
 
   if (screen === null) {
     return (
-      <div className="loading">
-        <div className="loading-spinner" />
+      <div className="flex h-screen items-center justify-center">
+        <div
+          className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-primary"
+          aria-hidden
+        />
       </div>
     );
   }
 
   return (
     <div className="app">
-      {/* 상단 헤더 */}
       <header className="app-header">
-        <div className="header-logo">
-          <span className="logo-icon">⚡</span>
-          <span className="logo-text">UserUse</span>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold tracking-tight text-foreground">
+            UserUse
+          </span>
         </div>
-        <div className="header-actions">
+        <div className="flex items-center gap-1">
           {screen === 'guide' && (
-            <button
-              className="btn-icon"
-              onClick={() => setScreen(s => s === 'settings' ? 'guide' : 'settings')}
+            <Button
+              variant="ghost"
+              size="iconSm"
+              onClick={() => setScreen(s => (s === 'settings' ? 'guide' : 'settings'))}
               title={chrome.i18n.getMessage('appSettings')}
+              className="text-muted-foreground hover:text-foreground"
             >
-              ⚙️
-            </button>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </Button>
           )}
         </div>
       </header>
 
-      {/* 콘텐츠 */}
       <main className="app-main">
-        {screen === 'survey' && (
-          <Survey onComplete={handleSurveyComplete} />
-        )}
+        {screen === 'survey' && <Survey onComplete={handleSurveyComplete} />}
+
         {screen === 'awaiting_survey' && (
-          <div className="awaiting-survey">
-            <p className="awaiting-survey-text">{chrome.i18n.getMessage('awaitingSurveyText')}</p>
-            <p className="awaiting-survey-hint">{chrome.i18n.getMessage('awaitingSurveyHint')}</p>
-            <button
-              type="button"
-              className="btn-primary"
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <p className="text-sm font-medium text-foreground">
+              {chrome.i18n.getMessage('awaitingSurveyText')}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {chrome.i18n.getMessage('awaitingSurveyHint')}
+            </p>
+            <Button
+              className="w-full"
               onClick={() => chrome.runtime.sendMessage({ type: 'OPEN_SURVEY_TAB' })}
             >
               {chrome.i18n.getMessage('openSurveyTab')}
-            </button>
+            </Button>
           </div>
         )}
+
         {screen === 'guide' && apiKeyValid === null && (
-          <div className="loading guide-key-check">
-            <div className="loading-spinner" />
-            <p className="guide-key-check-text">{chrome.i18n.getMessage('checkingSettings')}</p>
+          <div className="flex min-h-[120px] flex-col items-center justify-center gap-3">
+            <div
+              className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-primary"
+              aria-hidden
+            />
+            <p className="text-xs text-muted-foreground">
+              {chrome.i18n.getMessage('checkingSettings')}
+            </p>
           </div>
         )}
+
         {screen === 'guide' && apiKeyValid === false && (
-          <div className="guide-key-required">
-            <p className="guide-key-required-title">🔑 {chrome.i18n.getMessage('backendRequiredTitle')}</p>
-            <p className="guide-key-required-desc">{chrome.i18n.getMessage('backendRequiredDesc')}</p>
-            <button type="button" className="btn-primary" onClick={() => setScreen('settings')}>
+          <div className="flex flex-col gap-4 py-4">
+            <p className="text-sm font-semibold text-foreground">
+              {chrome.i18n.getMessage('backendRequiredTitle')}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {chrome.i18n.getMessage('backendRequiredDesc')}
+            </p>
+            <Button onClick={() => setScreen('settings')}>
               {chrome.i18n.getMessage('openSettingsBackend')}
-            </button>
+            </Button>
           </div>
         )}
+
         {screen === 'guide' && apiKeyValid === true && (
           <>
-            <div className="guide-tabs">
-              <button
-                type="button"
-                className={`guide-tab-btn ${activeTab === 'plan' ? 'active' : ''}`}
-                onClick={() => setActiveTab('plan')}
-              >
-                {getUILocale() === 'en' ? 'Plan' : (chrome.i18n.getMessage('tabPlan') || '진행 플랜')}
-              </button>
-              <button
-                type="button"
-                className={`guide-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
-                onClick={() => setActiveTab('chat')}
-              >
-                {getUILocale() === 'en' ? 'Chat' : (chrome.i18n.getMessage('tabChat') || '채팅')}
-              </button>
-            </div>
-            {activeTab === 'plan' ? (
-              <Guide
-                plan={plan}
-                currentTab={currentTab}
-                onPlanUpdate={handlePlanUpdate}
-                onReset={handleReset}
-                onSettings={() => setScreen('settings')}
-              />
-            ) : (
-              <Chat
-                plan={plan}
-                currentTab={currentTab}
-              />
-            )}
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="tabs-wrapper mb-3 w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="plan">
+                  {getUILocale() === 'en'
+                    ? 'Plan'
+                    : (chrome.i18n.getMessage('tabPlan') || '진행 플랜')}
+                </TabsTrigger>
+                <TabsTrigger value="chat">
+                  {getUILocale() === 'en'
+                    ? 'Chat'
+                    : (chrome.i18n.getMessage('tabChat') || '채팅')}
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="plan" className="mt-0 flex flex-1 flex-col gap-3" data-guide-content>
+                <Guide
+                  plan={plan}
+                  currentTab={currentTab}
+                  onPlanUpdate={handlePlanUpdate}
+                  onReset={handleReset}
+                  onSettings={() => setScreen('settings')}
+                />
+              </TabsContent>
+              <TabsContent value="chat" className="mt-0 flex flex-1 flex-col" data-chat-content>
+                <Chat plan={plan} currentTab={currentTab} />
+              </TabsContent>
+            </Tabs>
           </>
         )}
+
         {screen === 'settings' && (
           <Settings onBack={() => setScreen('guide')} />
         )}

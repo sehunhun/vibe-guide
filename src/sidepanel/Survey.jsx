@@ -8,6 +8,12 @@ import {
   REQUIREMENT_TO_SERVICE,
   getPlannerMessages,
 } from '../data/planner.js';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardHeader } from '../components/ui/card.jsx';
+import { Progress } from '../components/ui/progress.jsx';
+import { Checkbox } from '../components/ui/checkbox.jsx';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion.jsx';
+import { cn } from '../lib/utils.js';
 
 export default function Survey({ onComplete }) {
   const [step, setStep] = useState(0);
@@ -32,7 +38,6 @@ export default function Survey({ onComplete }) {
         return;
       }
       setAiTools(tools);
-      // 기본값으로 모두 선택하지 않고, 사용자가 직접 선택하도록 비워둠
       setSelectedToolIds(new Set());
       setStep(1);
     } catch (e) {
@@ -57,15 +62,11 @@ export default function Survey({ onComplete }) {
 
   async function handleGuideStart() {
     const selected = aiTools.filter(t => selectedToolIds.has(t.id));
-    const payload = buildSurveyPayload({
-      siteGoal: siteGoal.trim(),
-      selectedTools: selected,
-    });
+    const payload = buildSurveyPayload({ siteGoal: siteGoal.trim(), selectedTools: selected });
     await storage.savePlan(payload);
-    const aiStudioUrl = 'https://aistudio.google.com/apps';
     if (chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) chrome.tabs.update(tabs[0].id, { url: aiStudioUrl });
+        if (tabs[0]?.id) chrome.tabs.update(tabs[0].id, { url: 'https://aistudio.google.com/apps' });
       });
     }
     onComplete(payload);
@@ -74,60 +75,58 @@ export default function Survey({ onComplete }) {
   const selectedTools = step === 2 ? aiTools.filter(t => selectedToolIds.has(t.id)) : [];
   const uniqueServices = step === 2 ? getUniqueServicesFromSelectedTools(selectedTools) : [];
   const requirementObjects = step === 2 ? buildRequirementObjects(selectedTools) : [];
+  const progressPct = ((step + 1) / 3) * 100;
 
   return (
-    <div className="survey">
-      <div className="survey-progress">
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${((step + 1) / 3) * 100}%` }} />
-        </div>
-        <span className="progress-text">{step + 1} / 3</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <Progress value={progressPct} className="h-1.5 flex-1" />
+        <span className="text-[11px] text-muted-foreground">{step + 1} / 3</span>
       </div>
 
       {step === 0 && (
         <>
-          <div className="survey-question">
-            <div className="question-emoji">🌐</div>
-            <h2 className="question-title">{chrome.i18n.getMessage('surveyQuestion1')}</h2>
-            <p className="question-hint">{chrome.i18n.getMessage('surveyHint1')}</p>
+          <div className="text-center">
+            <h2 className="mb-1 text-sm font-semibold">{chrome.i18n.getMessage('surveyQuestion1')}</h2>
+            <p className="text-xs text-muted-foreground">{chrome.i18n.getMessage('surveyHint1')}</p>
           </div>
-          <div className="survey-text-wrap">
-            <textarea
-              className="survey-textarea"
-              placeholder={chrome.i18n.getMessage('surveyPlaceholder')}
-              value={siteGoal}
-              onChange={e => setSiteGoal(e.target.value)}
-              rows={3}
-              disabled={submitLoading}
-            />
-          </div>
-          {error && <p className="survey-error">{error}</p>}
+          <textarea
+            className="min-h-[80px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
+            placeholder={chrome.i18n.getMessage('surveyPlaceholder')}
+            value={siteGoal}
+            onChange={e => setSiteGoal(e.target.value)}
+            rows={3}
+            disabled={submitLoading}
+          />
+          {error && (
+            <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
         </>
       )}
 
       {step === 1 && (
         <>
-          <div className="survey-question">
-            <div className="question-emoji">⚙️</div>
-            <h2 className="question-title">{chrome.i18n.getMessage('surveyTitleFeatures')}</h2>
-            <p className="question-hint">{chrome.i18n.getMessage('surveyHintFeatures')}</p>
+          <div className="text-center">
+            <h2 className="mb-1 text-sm font-semibold">{chrome.i18n.getMessage('surveyTitleFeatures')}</h2>
+            <p className="text-xs text-muted-foreground">{chrome.i18n.getMessage('surveyHintFeatures')}</p>
           </div>
-          <div className="survey-options">
+          <div className="flex flex-col gap-2">
             {aiTools.map(tool => {
               const selected = selectedToolIds.has(tool.id);
               return (
                 <button
                   key={tool.id}
                   type="button"
-                  className={`option-btn ${selected ? 'selected' : ''}`}
+                  className={cn(
+                    'flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                    selected ? 'border-primary/50 bg-primary/10' : 'border-border bg-card hover:bg-muted/50'
+                  )}
                   onClick={() => toggleTool(tool.id)}
                 >
-                  <div className="option-check">
-                    <span className={`checkbox ${selected ? 'active' : ''}`}>{selected && '✓'}</span>
-                  </div>
-                  <div className="option-content">
-                    <span className="option-label">{tool.description}</span>
-                  </div>
+                  <Checkbox checked={selected} onCheckedChange={() => toggleTool(tool.id)} className="mt-0.5 shrink-0" />
+                  <span className="text-sm font-medium">{tool.description}</span>
                 </button>
               );
             })}
@@ -137,76 +136,78 @@ export default function Survey({ onComplete }) {
 
       {step === 2 && (
         <>
-          <div className="survey-question">
-            <div className="question-emoji">✅</div>
-            <h2 className="question-title">{chrome.i18n.getMessage('surveyTitleServices')}</h2>
-            <p className="question-hint">{chrome.i18n.getMessage('surveyHintServices')}</p>
+          <div className="text-center">
+            <h2 className="mb-1 text-sm font-semibold">{chrome.i18n.getMessage('surveyTitleServices')}</h2>
+            <p className="text-xs text-muted-foreground">{chrome.i18n.getMessage('surveyHintServices')}</p>
           </div>
-          <div className="services-summary-list">
+          <Accordion
+            type="single"
+            collapsible
+            value={expandedServiceId ?? ''}
+            onValueChange={v => setExpandedServiceId(v || null)}
+            className="space-y-2"
+          >
             {uniqueServices.map(s => {
-              const isOpen = expandedServiceId === s.id;
               const desc = getPlannerMessages().serviceDescriptions[s.id];
               const descriptions = requirementObjects
                 .filter(ro => REQUIREMENT_TO_SERVICE[ro.requirement]?.id === s.id)
                 .flatMap(ro => ro.descriptions || []);
               return (
-                <div key={s.id} className="service-summary-item-wrap">
-                  <button
-                    type="button"
-                    className={`service-summary-item ${isOpen ? 'open' : ''}`}
-                    onClick={() => setExpandedServiceId(isOpen ? null : s.id)}
-                  >
-                    <span className="service-summary-icon">{s.icon}</span>
-                    <span className="service-summary-name">{s.name}</span>
-                    <span className="service-summary-chevron">{isOpen ? '▲' : '▼'}</span>
-                  </button>
-                  {isOpen && (
-                    <div className="service-summary-dropdown">
-                      {desc?.summary && (
-                        <p className="service-desc-summary">{desc.summary}</p>
-                      )}
-                      {descriptions.length > 0 && (
-                        <p className="service-desc-list">
-                          <strong>{chrome.i18n.getMessage('surveyReasonLabel')}</strong> {[...new Set(descriptions)].join(', ')}
-                        </p>
-                      )}
-                      {desc?.whyNeeded && (
-                        <p className="service-desc-why">{desc.whyNeeded}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <AccordionItem key={s.id} value={s.id} className="rounded-lg border border-border bg-card">
+                  <AccordionTrigger className="px-3 py-2.5 text-sm font-medium hover:no-underline">
+                    <span className="mr-2">{s.icon}</span>
+                    {s.name}
+                  </AccordionTrigger>
+                  <AccordionContent className="px-3 pb-3 pt-0">
+                    {desc?.summary && <p className="mb-2 text-xs text-foreground">{desc.summary}</p>}
+                    {descriptions.length > 0 && (
+                      <p className="mb-2 text-[11px] text-muted-foreground">
+                        <strong>{chrome.i18n.getMessage('surveyReasonLabel')}</strong>{' '}
+                        {[...new Set(descriptions)].join(', ')}
+                      </p>
+                    )}
+                    {desc?.whyNeeded && (
+                      <p className="border-t border-border pt-2 text-[11px] text-muted-foreground">
+                        {desc.whyNeeded}
+                      </p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
               );
             })}
-          </div>
-          <button className="btn-primary btn-start-inline" onClick={handleGuideStart}>
-            {chrome.i18n.getMessage('surveyBtnStart')} 🚀
-          </button>
+          </Accordion>
+          <Button className="w-full" onClick={handleGuideStart}>
+            {chrome.i18n.getMessage('surveyBtnStart')}
+          </Button>
         </>
       )}
 
-      <div className="survey-nav">
+      <div className="flex gap-2 pt-1">
         {step === 0 ? (
-          <button
-            className="btn-primary"
+          <Button
+            className="flex-1"
             disabled={!siteGoal.trim() || submitLoading}
             onClick={handleNext}
           >
-            {submitLoading ? chrome.i18n.getMessage('surveyBtnLoading') : chrome.i18n.getMessage('surveyBtnNext') + ' →'}
-          </button>
+            {submitLoading ? chrome.i18n.getMessage('surveyBtnLoading') : chrome.i18n.getMessage('surveyBtnNext')}
+          </Button>
         ) : step === 1 ? (
           <>
-            <button className="btn-secondary" onClick={() => setStep(0)}>← {chrome.i18n.getMessage('surveyBtnPrev')}</button>
-            <button
-              className="btn-primary"
+            <Button variant="secondary" onClick={() => setStep(0)}>
+              {chrome.i18n.getMessage('surveyBtnPrev')}
+            </Button>
+            <Button
+              className="flex-1"
               disabled={selectedToolIds.size === 0}
               onClick={handleNextFromCheckboxes}
             >
-              {chrome.i18n.getMessage('surveyBtnNext')} →
-            </button>
+              {chrome.i18n.getMessage('surveyBtnNext')}
+            </Button>
           </>
         ) : (
-          <button className="btn-secondary" onClick={() => setStep(1)}>← {chrome.i18n.getMessage('surveyBtnPrev')}</button>
+          <Button variant="secondary" className="flex-1" onClick={() => setStep(1)}>
+            {chrome.i18n.getMessage('surveyBtnPrev')}
+          </Button>
         )}
       </div>
     </div>

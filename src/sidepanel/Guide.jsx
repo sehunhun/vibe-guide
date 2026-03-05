@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardContent, CardHeader } from '../components/ui/card.jsx';
+import { Progress } from '../components/ui/progress.jsx';
+import { Badge } from '../components/ui/badge.jsx';
+import { cn } from '../lib/utils.js';
 
 /**
  * Guide - Step2 메인 화면
@@ -828,235 +833,207 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     : chrome.i18n.getMessage('guidePageTitle');
 
   return (
-    <div className="guide">
-      {/* 현재 위치 배너 */}
+    <div className="flex flex-col gap-3">
       {detectedToolId && (
-        <div className="detected-banner">
-          <span className="detected-icon">📍</span>
+        <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          <span className="text-amber-500">●</span>
           <span>
             {chrome.i18n.getMessage('guideYouAreOn')} <strong>{plan.tools.find(t => t.id === detectedToolId)?.name || detectedToolId}</strong>{chrome.i18n.getMessage('guideYouAreOnSuffix')}
           </span>
         </div>
       )}
 
-      {/* 전체 진행률: AI 단계 완료 기준 자동 트래킹 + 사이트 링크 (위치: 이 페이지에서 할 일 위) */}
-      <div className="guide-progress guide-progress-icons">
-        <div className="progress-info">
-          <span className="progress-label">{chrome.i18n.getMessage('guideProgressLabel')}</span>
-          <span className="progress-count">{doneDomains}/{totalDomains} {chrome.i18n.getMessage('guideDomainsDone')}</span>
-        </div>
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-        </div>
-        <div className="progress-tool-icons">
-          {(plan.steps || []).map((step) => {
-            const done = stepDoneByToolId[step.toolId] === true;
-            const icon = step.toolIcon || plan.tools?.find(t => t.id === step.toolId)?.logo || '•';
-            return (
-              <span
-                key={step.stepId}
-                className={`progress-tool-icon ${done ? 'done' : ''}`}
-                title={step.title}
-              >
-                {done ? '✅' : icon}
-              </span>
-            );
-          })}
-        </div>
-        <div className="progress-site-links">
-          {(plan.steps || []).map((step, idx) => {
-            const icon = step.toolIcon || plan.tools?.find(t => t.id === step.toolId)?.logo || '•';
-            const url = step.url || plan.tools?.find(t => t.id === step.toolId)?.url;
-            const name = step.toolName || plan.tools?.find(t => t.id === step.toolId)?.name || step.title;
-            if (!url) return null;
-            const isSelected = selectedDomainUrl && isSameDomain(url, selectedDomainUrl);
-            return (
-              <div key={step.stepId} className="progress-site-link-wrapper">
-                <a
-                  className={`progress-site-link ${isSelected ? 'active' : ''}`}
-                  href={url}
-                  onClick={(e) => { 
-                    e.preventDefault(); 
-                    handleSwitchToDomain(url); 
-                  }}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">{chrome.i18n.getMessage('guideProgressLabel')}</span>
+            <span className="text-xs font-semibold text-foreground">{doneDomains}/{totalDomains} {chrome.i18n.getMessage('guideDomainsDone')}</span>
+          </div>
+          <Progress value={progressPct} className="h-1.5" />
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <div className="flex flex-wrap items-center justify-between gap-1 text-muted-foreground/50">
+            {(plan.steps || []).map((step) => {
+              const done = stepDoneByToolId[step.toolId] === true;
+              const icon = step.toolIcon || plan.tools?.find(t => t.id === step.toolId)?.logo || '•';
+              return (
+                <span
+                  key={step.stepId}
+                  className={cn('text-base transition-opacity', done && 'opacity-100')}
+                  title={step.title}
                 >
-                  <span className="progress-site-link-num">{idx + 1}.</span>
-                  <span className="progress-site-link-icon">{icon}</span>
-                  <span className="progress-site-link-label"><strong>{name}</strong></span>
-                </a>
-                <button
-                  className="progress-site-link-clip"
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleOpenTool(url);
-                  }}
-                  title={chrome.i18n.getMessage('guideOpenNewTab')}
-                >
-                  📎
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                  {done ? '✓' : icon}
+                </span>
+              );
+            })}
+          </div>
+          <div className="flex flex-col gap-1 border-t border-border pt-2">
+            {(plan.steps || []).map((step, idx) => {
+              const icon = step.toolIcon || plan.tools?.find(t => t.id === step.toolId)?.logo || '•';
+              const url = step.url || plan.tools?.find(t => t.id === step.toolId)?.url;
+              const name = step.toolName || plan.tools?.find(t => t.id === step.toolId)?.name || step.title;
+              if (!url) return null;
+              const isSelected = selectedDomainUrl && isSameDomain(url, selectedDomainUrl);
+              return (
+                <div key={step.stepId} className="flex items-center gap-1">
+                  <a
+                    className={cn(
+                      'flex flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                      isSelected ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                    )}
+                    href={url}
+                    onClick={(e) => { e.preventDefault(); handleSwitchToDomain(url); }}
+                  >
+                    <span className="w-4 shrink-0 text-right text-muted-foreground">{idx + 1}.</span>
+                    <span>{icon}</span>
+                    <span>{name}</span>
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenTool(url); }}
+                    title={chrome.i18n.getMessage('guideOpenNewTab')}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* 이 페이지에서 할 일 (AI 단계별 가이드) - URL별 캐시 유지 */}
       {currentTab?.tabId && (
-        <div className="page-guidance-section" ref={pageGuidanceSectionRef}>
-          <h3 className="page-guidance-title">{pageGuidanceTitle}</h3>
+        <Card ref={pageGuidanceSectionRef}>
+          <CardHeader className="pb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{pageGuidanceTitle}</h3>
+          </CardHeader>
+          <CardContent className="space-y-3">
           {incompleteStepMessage && (
-            <div className="page-guidance-warning" style={{
-              padding: '12px',
-              marginBottom: '12px',
-              backgroundColor: '#fff3cd',
-              border: '1px solid #ffc107',
-              borderRadius: '4px',
-              color: '#856404',
-            }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
-                ⚠️ {chrome.i18n.getMessage('guideIncompleteTitle')}
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-400">
+              <div className="mb-2 font-semibold text-xs">
+                {chrome.i18n.getMessage('guideIncompleteTitle')}
               </div>
-              <div style={{ marginBottom: '8px' }}>
-                "{incompleteStepMessage.text}"
-              </div>
-              <div style={{ fontSize: '0.9em', color: '#856404' }}>
-                {chrome.i18n.getMessage('guideIncompleteHint')}
-              </div>
-              <button
-                type="button"
-                className="btn-secondary btn-sm"
-                onClick={() => setIncompleteStepMessage(null)}
-                style={{ marginTop: '8px' }}
-              >
+              <div className="mb-2 text-xs">"{incompleteStepMessage.text}"</div>
+              <div className="mb-2 text-xs opacity-90">{chrome.i18n.getMessage('guideIncompleteHint')}</div>
+              <Button variant="secondary" size="sm" onClick={() => setIncompleteStepMessage(null)}>
                 {chrome.i18n.getMessage('guideClose')}
-              </button>
+              </Button>
             </div>
           )}
           {!loadingGuide && isPlanSite && (
-            <button type="button" className="btn-primary btn-guidance-request" onClick={handleRequestPageGuidance}>
-              {pageGuidance?.steps?.length ? '✨ ' + chrome.i18n.getMessage('guideNextStep') : '✨ ' + chrome.i18n.getMessage('guideGetGuidance')}
-            </button>
+            <Button className="w-full" onClick={handleRequestPageGuidance}>
+              {pageGuidance?.steps?.length ? chrome.i18n.getMessage('guideNextStep') : chrome.i18n.getMessage('guideGetGuidance')}
+            </Button>
           )}
           {loadingGuide && (
-            <div className="page-guidance-loading">
-              <span className="loading-dot" /> {chrome.i18n.getMessage('guideAnalyzing')}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+              {chrome.i18n.getMessage('guideAnalyzing')}
             </div>
           )}
           {pageGuidance?.error && (
-            <div className="page-guidance-error">
+            <div className="space-y-2 text-xs text-destructive">
               <p>{pageGuidance.error}</p>
-              <button type="button" className="btn-secondary btn-sm" onClick={handleRequestPageGuidance}>
+              <Button variant="secondary" size="sm" onClick={handleRequestPageGuidance}>
                 {chrome.i18n.getMessage('guideRetry')}
-              </button>
+              </Button>
             </div>
           )}
           {pageGuidance?.steps && pageGuidance.steps.length > 0 && (
-            <div className="page-guidance-steps">
+            <div className="space-y-2">
               {pageGuidance.steps
                 .filter((step) => {
-                  // 잘못된 단계 필터링: {"steps": []} 같은 JSON 문자열이 텍스트로 저장된 경우 제외
                   if (!step.text) return false;
                   const text = step.text.trim();
-                  if (text.startsWith('{"steps"') || (text.startsWith('{"') && text.includes('"steps"'))) {
-                    return false;
-                  }
+                  if (text.startsWith('{"steps"') || (text.startsWith('{"') && text.includes('"steps"'))) return false;
                   return true;
                 })
                 .map((step, idx) => {
-                // mergedGuidance인 경우 sourceUrl과 sourceIndex 사용, 아니면 pageUrl과 idx 사용
-                const sourceUrl = step.sourceUrl || pageUrl;
-                const sourceIndex = step.sourceIndex !== undefined ? step.sourceIndex : idx;
-                const completed = (pageStepCompletions[sourceUrl] && pageStepCompletions[sourceUrl][sourceIndex]) === true;
-                const isCompletionMessage = step.isCompletionMessage === true;
-                
-                return (
-                  <div key={`${sourceUrl}-${sourceIndex}`} className={`page-guidance-step ${completed || isCompletionMessage ? 'done' : ''}`}>
-                    <div className="page-guidance-step-header">
-                      {!isCompletionMessage && <span className="page-guidance-step-num">{idx + 1}</span>}
-                      <span className="page-guidance-step-text">{step.text}</span>
-                    </div>
-                    {!isCompletionMessage && (
-                      <div className="page-guidance-step-actions">
-                        {(step.selector || (step.backendDOMNodeId != null && Number.isFinite(Number(step.backendDOMNodeId)))) && (
-                          <button
-                            type="button"
-                            className="btn-spotlight"
-                            onClick={() => handleSpotlight({ ...step, sourceUrl, sourceIndex })}
-                          >
-                            📍 {chrome.i18n.getMessage('guideSpotlight')}
-                          </button>
-                        )}
-                        {step.action === 'copy_system_prompt' && plan?.systemPrompt && (
-                          <button
-                            type="button"
-                            className="btn-secondary btn-sm"
-                            onClick={handleCopySystemPrompt}
-                            title={chrome.i18n.getMessage('guideCopyPrompt')}
-                          >
-                            📋 복사
-                          </button>
-                        )}
-                        {step.action === 'copy_system_prompt' && systemPromptCopied && (
-                          <span className="page-guidance-copy-toast">
-                            {chrome.i18n.getMessage('guideCopied')}
+                  const sourceUrl = step.sourceUrl || pageUrl;
+                  const sourceIndex = step.sourceIndex !== undefined ? step.sourceIndex : idx;
+                  const completed = (pageStepCompletions[sourceUrl] && pageStepCompletions[sourceUrl][sourceIndex]) === true;
+                  const isCompletionMessage = step.isCompletionMessage === true;
+                  return (
+                    <div
+                      key={`${sourceUrl}-${sourceIndex}`}
+                      className={cn(
+                        'rounded-md border border-border bg-muted/50 p-2.5',
+                        (completed || isCompletionMessage) && 'opacity-75'
+                      )}
+                    >
+                      <div className="flex gap-2">
+                        {!isCompletionMessage && (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-semibold text-primary">
+                            {idx + 1}
                           </span>
                         )}
-                        <button
-                          type="button"
-                          className={completed ? 'btn-undo btn-sm' : 'btn-done btn-sm'}
-                          onClick={() => savePageStepCompletion(sourceUrl, sourceIndex, !completed)}
-                        >
-                          {completed ? chrome.i18n.getMessage('guideUndo') : chrome.i18n.getMessage('guideDone') + ' ✓'}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-text btn-sm"
-                          onClick={() => {
-                            if (confirm(chrome.i18n.getMessage('guideConfirmRemove'))) {
-                              removeStep(sourceUrl, sourceIndex);
-                            }
-                          }}
-                          style={{ color: '#999', fontSize: '0.85em' }}
-                          title={chrome.i18n.getMessage('guideRemoveStep')}
-                        >
-                          ✕
-                        </button>
+                        <span className="flex-1 text-xs leading-relaxed text-foreground">{step.text}</span>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div className="page-guidance-progress">
-                <span className="page-guidance-progress-text">
-                  {pageGuidance.steps.filter((step, idx) => {
-                    const sourceUrl = step.sourceUrl || pageUrl;
-                    const sourceIndex = step.sourceIndex !== undefined ? step.sourceIndex : idx;
-                    return (pageStepCompletions[sourceUrl] && pageStepCompletions[sourceUrl][sourceIndex]) === true;
-                  }).length}/{pageGuidance.steps.length} {chrome.i18n.getMessage('guideCompleteCount')}
-                </span>
-              </div>
+                      {!isCompletionMessage && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {(step.selector || (step.backendDOMNodeId != null && Number.isFinite(Number(step.backendDOMNodeId)))) && (
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleSpotlight({ ...step, sourceUrl, sourceIndex })}>
+                              {chrome.i18n.getMessage('guideSpotlight')}
+                            </Button>
+                          )}
+                          {step.action === 'copy_system_prompt' && plan?.systemPrompt && (
+                            <>
+                              <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={handleCopySystemPrompt} title={chrome.i18n.getMessage('guideCopyPrompt')}>
+                                {systemPromptCopied ? chrome.i18n.getMessage('guideCopied') : '복사'}
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant={completed ? 'ghost' : 'secondary'}
+                            size="sm"
+                            className={cn('h-7 text-xs', !completed && 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400')}
+                            onClick={() => savePageStepCompletion(sourceUrl, sourceIndex, !completed)}
+                          >
+                            {completed ? chrome.i18n.getMessage('guideUndo') : chrome.i18n.getMessage('guideDone')}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="iconSm"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => { if (confirm(chrome.i18n.getMessage('guideConfirmRemove'))) removeStep(sourceUrl, sourceIndex); }}
+                            title={chrome.i18n.getMessage('guideRemoveStep')}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              <p className="text-[11px] text-muted-foreground">
+                {pageGuidance.steps.filter((s, i) => {
+                  const u = s.sourceUrl || pageUrl;
+                  const i2 = s.sourceIndex !== undefined ? s.sourceIndex : i;
+                  return (pageStepCompletions[u] && pageStepCompletions[u][i2]) === true;
+                }).length}/{pageGuidance.steps.length} {chrome.i18n.getMessage('guideCompleteCount')}
+              </p>
             </div>
           )}
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {isAllDone && (
-        <div className="all-done-banner">
-          <div className="all-done-emoji">🎉</div>
-          <h3>모든 단계를 완료했어요!</h3>
-          <p>사이트가 완성됐습니다. 축하해요!</p>
-          <button className="btn-secondary" onClick={onReset}>
-            처음부터 다시 시작
-          </button>
-        </div>
+        <Card className="border-emerald-500/30 bg-emerald-500/10">
+          <CardContent className="py-5 text-center">
+            <p className="mb-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">모든 단계를 완료했어요</p>
+            <p className="mb-3 text-xs text-muted-foreground">사이트가 완성됐습니다.</p>
+            <Button variant="secondary" onClick={onReset}>처음부터 다시 시작</Button>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="guide-footer">
-        <button className="btn-text" onClick={onReset}>
-          🔄 {chrome.i18n.getMessage('resetPlanButton')}
-        </button>
+      <div className="flex justify-center pt-2">
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={onReset}>
+          {chrome.i18n.getMessage('resetPlanButton')}
+        </Button>
       </div>
     </div>
   );
