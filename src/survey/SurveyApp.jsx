@@ -249,9 +249,6 @@ export default function SurveyApp() {
                 );
               })}
             </Accordion>
-            <Button className="w-full" size="lg" onClick={handleGuideStart}>
-              {chrome.i18n.getMessage('surveyBtnStart')}
-            </Button>
           </>
         )}
       </div>

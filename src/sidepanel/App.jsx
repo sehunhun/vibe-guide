@@ -187,13 +187,13 @@ export default function App() {
         )}
 
         {screen === 'guide' && apiKeyValid === true && (
-          <>
+          <div className="flex min-h-0 flex-1 flex-col">
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
-              className="tabs-wrapper mb-3 w-full"
+              className="tabs-wrapper mb-3 flex min-h-0 w-full flex-1 flex-col"
             >
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-2 shrink-0">
                 <TabsTrigger value="plan">
                   {getUILocale() === 'en'
                     ? 'Plan'
@@ -205,7 +205,7 @@ export default function App() {
                     : (chrome.i18n.getMessage('tabChat') || '채팅')}
                 </TabsTrigger>
               </TabsList>
-              <TabsContent value="plan" className="mt-0 flex flex-1 flex-col gap-3" data-guide-content>
+              <TabsContent value="plan" className="mt-0 flex min-h-0 flex-1 flex-col gap-3 overflow-hidden data-[state=inactive]:hidden" data-guide-content>
                 <Guide
                   plan={plan}
                   currentTab={currentTab}
@@ -214,11 +214,11 @@ export default function App() {
                   onSettings={() => setScreen('settings')}
                 />
               </TabsContent>
-              <TabsContent value="chat" className="mt-0 flex flex-1 flex-col" data-chat-content>
+              <TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden" data-chat-content>
                 <Chat plan={plan} currentTab={currentTab} />
               </TabsContent>
             </Tabs>
-          </>
+          </div>
         )}
 
         {screen === 'settings' && (

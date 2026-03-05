@@ -91,9 +91,9 @@ export default function Chat({ plan, currentTab }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-        <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden">
+        <div className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-4 text-center text-xs text-muted-foreground shrink-0">
           <p className="mb-1">{chrome.i18n.getMessage('chatIntro')}</p>
           <p>{chrome.i18n.getMessage('chatExample')}</p>
         </div>
@@ -131,7 +131,7 @@ export default function Chat({ plan, currentTab }) {
           </div>
         )}
 
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="shrink-0" />
       </div>
 
       {error && (
@@ -140,7 +140,7 @@ export default function Chat({ plan, currentTab }) {
         </div>
       )}
 
-      <div className="flex shrink-0 items-end gap-2">
+      <div className="flex shrink-0 items-end gap-2 pt-1">
         <textarea
           className="min-h-[44px] w-full flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:opacity-50"
           placeholder={chrome.i18n.getMessage('chatPlaceholder')}

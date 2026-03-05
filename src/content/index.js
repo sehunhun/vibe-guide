@@ -13,6 +13,9 @@ const MAX_HTML_LEN = 35000;
 /** 스포트라이트 제거 시 추가 정리(리스너 해제, data 속성 제거 등) */
 let _spotlightCleanup = null;
 
+/** 4초 자동 제거 타이머 ID (clearTimeout용) */
+let _spotlightTimeoutId = null;
+
 /** wrapper 생성 중복 방지: 한 번에 하나만 감싸기 */
 let _spotlightWrapLock = false;
 
@@ -55,6 +58,10 @@ function unwrapSpotlight() {
 /** 스포트라이트 제거 (wrapper가 여러 개 쌓여 있어도 전부 제거) */
 function removeSpotlight() {
   _spotlightWrapLock = false;
+  if (_spotlightTimeoutId != null) {
+    clearTimeout(_spotlightTimeoutId);
+    _spotlightTimeoutId = null;
+  }
   if (_spotlightCleanup) {
     _spotlightCleanup();
     _spotlightCleanup = null;
@@ -112,16 +119,21 @@ function wrapElementBySelector(selector) {
     try {
       const target = event?.target;
       if (wrapper && target && wrapper.contains(target)) {
-        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' });
+        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
       }
     } catch (e) {
       // ignore
     }
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
+    if (_spotlightTimeoutId != null) {
+      clearTimeout(_spotlightTimeoutId);
+      _spotlightTimeoutId = null;
+    }
   };
   document.addEventListener('click', clickHandler, true);
-  setTimeout(() => {
+  _spotlightTimeoutId = setTimeout(() => {
+    _spotlightTimeoutId = null;
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
   }, 4000);
@@ -169,16 +181,21 @@ function spotlightBySelector(selector) {
     try {
       const target = event?.target;
       if (el && target && el.contains(target)) {
-        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' });
+        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
       }
     } catch (e) {
       // ignore
     }
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
+    if (_spotlightTimeoutId != null) {
+      clearTimeout(_spotlightTimeoutId);
+      _spotlightTimeoutId = null;
+    }
   };
   document.addEventListener('click', clickHandler, true);
-  setTimeout(() => {
+  _spotlightTimeoutId = setTimeout(() => {
+    _spotlightTimeoutId = null;
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
   }, 4000);
@@ -226,9 +243,14 @@ function spotlightByRect(rect) {
   const clickHandler = () => {
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
+    if (_spotlightTimeoutId != null) {
+      clearTimeout(_spotlightTimeoutId);
+      _spotlightTimeoutId = null;
+    }
   };
   document.addEventListener('click', clickHandler, true);
-  setTimeout(() => {
+  _spotlightTimeoutId = setTimeout(() => {
+    _spotlightTimeoutId = null;
     removeSpotlight();
     document.removeEventListener('click', clickHandler, true);
   }, 4000);
@@ -258,24 +280,38 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.type === 'SPOTLIGHT_WRAP_DONE') {
     console.log('[vibe-guide] 스포트라이트: backendDOMNodeId 분기 (CDP에서 이미 wrap됨, 해제만 등록)');
+    if (_spotlightTimeoutId != null) {
+      clearTimeout(_spotlightTimeoutId);
+      _spotlightTimeoutId = null;
+    }
     const clickHandler = (event) => {
       try {
         const wrapper = document.getElementById('vibe-guide-spotlight-wrapper');
         const target = event?.target;
         if (wrapper && target && wrapper.contains(target)) {
-          chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' });
+          chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
         }
       } catch (e) {
         // ignore
       }
       removeSpotlight();
       document.removeEventListener('click', clickHandler, true);
+      if (_spotlightTimeoutId != null) {
+        clearTimeout(_spotlightTimeoutId);
+        _spotlightTimeoutId = null;
+      }
     };
     document.addEventListener('click', clickHandler, true);
-    setTimeout(() => {
+    _spotlightTimeoutId = setTimeout(() => {
+      _spotlightTimeoutId = null;
       removeSpotlight();
       document.removeEventListener('click', clickHandler, true);
     }, 4000);
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (msg.type === 'REMOVE_SPOTLIGHT') {
+    removeSpotlight();
     sendResponse({ ok: true });
     return true;
   }

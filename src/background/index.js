@@ -340,6 +340,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'SPOTLIGHT_ELEMENT') {
     const { tabId, selector, backendDOMNodeId } = msg;
+    // 이전 스포트라이트/래퍼 제거 (컨텐츠 스크립트가 있으면 제거)
+    chrome.tabs.sendMessage(tabId, { type: 'REMOVE_SPOTLIGHT' }).catch(() => {});
+
     const backendId = backendDOMNodeId != null ? Number(backendDOMNodeId) : NaN;
     if (Number.isFinite(backendId)) {
       console.log('[vibe-guide] 스포트라이트 분기: backendDOMNodeId 있음 → CDP wrap, SPOTLIGHT_WRAP_DONE', { backendId, tabId });

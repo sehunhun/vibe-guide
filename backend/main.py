@@ -186,6 +186,22 @@ def _extract_output_text_from_responses_api(data: dict) -> str:
     return text
 
 
+def _count_web_search_calls_from_responses_api(data: dict) -> int:
+    """
+    OpenAI Responses API output에서 web_search 사용 횟수를 센다.
+    - type="web_search_call" (Responses API 공식 형식)
+    - type="tool_call" 이고 tool_name="web_search" (호환)
+    """
+    output = data.get("output") or []
+    count = 0
+    for item in output:
+        if item.get("type") == "web_search_call":
+            count += 1
+        elif item.get("type") == "tool_call" and item.get("tool_name") == "web_search":
+            count += 1
+    return count
+
+
 @app.get("/")
 async def root():
     return {"message": "Vibe Guide API", "status": "ok"}
@@ -273,6 +289,11 @@ async def get_guidance(request: GuidanceRequest):
                 )
 
             data = response.json()
+            web_search_count = _count_web_search_calls_from_responses_api(data)
+            if web_search_count > 0:
+                logger.info(f"[guidance] 이번 요청에서 web_search 사용: {web_search_count}회")
+            else:
+                logger.info("[guidance] 이번 요청에서 web_search 미사용")
             raw = _extract_output_text_from_responses_api(data)
 
             if not raw:
