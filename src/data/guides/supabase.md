@@ -1,16 +1,13 @@
 접속: https://supabase.com
 
-## 조회해야 할 값
+## 조회해야 할 값과 그 위치
+Project URL: https://supabase.com/dashboard/project/{project-id}/settings/api-keys
+anon public key: https://supabase.com/dashboard/project/{project-id}/settings/api-keys/legacy
 
-Project URL
-anon public key
+- 위 두 값을 찾은 경우 이 페이지에서 할 일을 마칩니다.
+- 구체적인 반환 형식
+{ "steps": [] }
 
-## 주요 UI 탐색 경로
-
-1. 로그인
-2. Dashboard에서 프로젝트 선택
-3. 좌측 메뉴 → Project Settings
-4. 상단 탭 → API
 
 ## 복사해야 할 환경변수
 

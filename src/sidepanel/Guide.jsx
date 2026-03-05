@@ -68,6 +68,14 @@ function isSameDomain(url1, url2) {
   return domain1 === domain2;
 }
 
+/** 같은 툴(사이트)인지 확인: 툴 ID 기준 우선, 없으면 도메인 비교 */
+function isSameSite(url1, url2) {
+  const tool1 = getToolIdForUrl(url1);
+  const tool2 = getToolIdForUrl(url2);
+  if (tool1 && tool2) return tool1 === tool2;
+  return isSameDomain(url1, url2);
+}
+
 /** URL이 플랜 단계 사이트(progress-site-links) 또는 그 하위 페이지인지 */
 function isPlanSiteOrSubpage(url, plan) {
   if (!url || !plan?.steps?.length) return false;
@@ -181,6 +189,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   const [systemPromptCopied, setSystemPromptCopied] = useState(false);
 
   const pageUrl = currentTab?.url || '';
+  const isPlanSite = plan && isPlanSiteOrSubpage(pageUrl, plan);
 
   // 저장된 캐시 + 페이지 단계 완료 불러오기
   useEffect(() => {
@@ -204,11 +213,11 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
       return;
     }
     
-    const currentDomain = getDomainFromUrl(url);
-    const previousDomain = previousDomainRef.current;
+  const currentDomain = getDomainFromUrl(url);
+  const previousDomain = previousDomainRef.current;
     
     // 현재 페이지가 선택된 도메인과 같은 도메인이면 선택 해제 (자동으로 현재 페이지 표시)
-    if (selectedDomainUrl && isSameDomain(url, selectedDomainUrl)) {
+    if (selectedDomainUrl && isSameSite(url, selectedDomainUrl)) {
       setSelectedDomainUrl(null);
     }
     
@@ -235,11 +244,17 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
               setGuidanceByUrl(prev => ({ ...prev, [url]: { error: res.error } }));
               chrome.storage.local.set({ pageGuidanceCache: next });
             } else if (res?.steps?.length) {
-              const next = { ...cache, [url]: { steps: res.steps } };
-              setGuidanceByUrl(prev => ({ ...prev, [url]: { steps: res.steps } }));
+              const now = Date.now();
+              const stampedSteps = res.steps.map(step => ({
+                ...step,
+                createdAt: typeof step.createdAt === 'number' ? step.createdAt : now,
+              }));
+              const next = { ...cache, [url]: { steps: stampedSteps } };
+              setGuidanceByUrl(prev => ({ ...prev, [url]: { steps: stampedSteps } }));
               chrome.storage.local.set({ pageGuidanceCache: next });
             } else if (res?.text) {
-              const steps = [{ text: res.text, selector: res.selector || null }];
+              const now = Date.now();
+              const steps = [{ text: res.text, selector: res.selector || null, createdAt: now }];
               const next = { ...cache, [url]: { steps } };
               setGuidanceByUrl(prev => ({ ...prev, [url]: { steps } }));
               chrome.storage.local.set({ pageGuidanceCache: next });
@@ -254,7 +269,28 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   }, [currentTab?.hostname, currentTab?.url, currentTab?.tabId, plan, selectedDomainUrl]);
 
   const handleOpenTool = (url) => {
-    chrome.tabs.create({ url });
+    // 이미 같은 도메인의 탭이 열려 있으면 그 탭으로 이동, 없으면 새 탭 생성
+    try {
+      chrome.tabs.query({}, (tabs) => {
+        if (!Array.isArray(tabs)) {
+          chrome.tabs.create({ url });
+          return;
+        }
+
+        const existing = tabs.find((tab) => tab.url && isSameSite(tab.url, url));
+        if (existing && existing.id != null) {
+          chrome.tabs.update(existing.id, { active: true });
+          if (existing.windowId != null) {
+            chrome.windows.update(existing.windowId, { focused: true });
+          }
+        } else {
+          chrome.tabs.create({ url });
+        }
+      });
+    } catch {
+      // query 사용이 불가능한 환경이면 기존 동작 유지
+      chrome.tabs.create({ url });
+    }
   };
 
   const handleCopySystemPrompt = useCallback(() => {
@@ -323,7 +359,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     // 같은 도메인의 모든 단계 확인
     const allSteps = [];
     for (const [url, guidance] of Object.entries(guidanceByUrl)) {
-      if (guidance?.steps?.length && isSameDomain(url, pageUrl)) {
+      if (guidance?.steps?.length && isSameSite(url, pageUrl)) {
         const completions = pageStepCompletions[url] || [];
         guidance.steps.forEach((step, idx) => {
           const isCompleted = completions[idx] === true;
@@ -351,6 +387,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   /** 현재 탭에 대한 AI 안내 다시 요청 (이전 단계 유지하면서 다음 단계 추가) */
   const handleRequestPageGuidance = useCallback(() => {
     if (!currentTab?.tabId || !pageUrl) return;
+    if (!plan || !isPlanSiteOrSubpage(pageUrl, plan)) return;
     
     // 최신 완료 상태를 직접 가져와서 확인
     chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
@@ -365,7 +402,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         // 같은 도메인의 모든 단계 확인
         const allSteps = [];
         for (const [url, guidance] of Object.entries(cache)) {
-          if (guidance?.steps?.length && isSameDomain(url, pageUrl)) {
+          if (guidance?.steps?.length && isSameSite(url, pageUrl)) {
             const urlCompletions = completions[url] || [];
             guidance.steps.forEach((step, idx) => {
               const isCompleted = urlCompletions[idx] === true;
@@ -429,6 +466,12 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
           // 모든 단계가 완료된 상태에서 AI가 새로운 단계를 생성하지 못한 경우를 추적
           // (현재는 단계가 생성되면 계속 진행)
           // AI가 한 번에 하나의 단계만 반환하므로, 이전 단계에 새 단계 하나를 추가
+          const now = Date.now();
+          const newSteps = res.steps.map(step => ({
+            ...step,
+            createdAt: typeof step.createdAt === 'number' ? step.createdAt : now,
+          }));
+
           let mergedSteps;
           let mergedCompleted;
           
@@ -440,14 +483,14 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             if (lastIncompleteIndex >= 0) {
               // 완료되지 않은 단계가 있으면 그 이후부터 새 단계로 교체 (하지만 AI는 하나만 반환하므로 추가)
               // 이전 단계는 유지하고 새 단계 하나 추가
-              mergedSteps = [...existingSteps, ...res.steps];
+              mergedSteps = [...existingSteps, ...newSteps];
               mergedCompleted = [...existingCompleted];
               while (mergedCompleted.length < mergedSteps.length) {
                 mergedCompleted.push(false);
               }
             } else {
               // 모두 완료되었으면 새 단계 하나를 추가
-              mergedSteps = [...existingSteps, ...res.steps];
+              mergedSteps = [...existingSteps, ...newSteps];
               mergedCompleted = [...existingCompleted];
               while (mergedCompleted.length < mergedSteps.length) {
                 mergedCompleted.push(false);
@@ -455,7 +498,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             }
           } else {
             // 이전 단계가 없으면 새 단계 하나만 사용
-            mergedSteps = res.steps;
+            mergedSteps = newSteps;
             mergedCompleted = new Array(mergedSteps.length).fill(false);
           }
           
@@ -474,6 +517,8 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             text: '🎉 ' + chrome.i18n.getMessage('guideCompletionMessage'),
             selector: null,
             isCompletionMessage: true,
+            // 생성 시점 기준 정렬을 위해 타임스탬프 부여 (항상 맨 아래로 오도록 최신 시간 사용)
+            createdAt: Date.now(),
           };
           
           // 기존 단계들을 유지하면서 완료 메시지만 추가
@@ -509,7 +554,8 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             }, 100);
           }
         } else if (res?.text) {
-          const steps = [{ text: res.text, selector: res.selector || null }];
+          const now = Date.now();
+          const steps = [{ text: res.text, selector: res.selector || null, createdAt: now }];
           // 이전 단계가 있으면 유지하고 새 단계 추가
           const mergedSteps = existingSteps.length > 0 ? [...existingSteps, ...steps] : steps;
           const next = { ...cache, [pageUrl]: { steps: mergedSteps } };
@@ -625,7 +671,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             // 같은 도메인의 모든 단계 수집
             const allSteps = [];
             for (const [url, guidance] of Object.entries(cache)) {
-              if (guidance?.steps?.length && isSameDomain(url, pageUrl)) {
+              if (guidance?.steps?.length && isSameSite(url, pageUrl)) {
                 const urlCompletions = url === sourceUrl ? next[url] : (all[url] || []);
                 guidance.steps.forEach((step, idx) => {
                   allSteps.push({
@@ -664,7 +710,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         }
       });
     });
-  }, [handleRequestPageGuidance, pageUrl]);
+  }, [handleRequestPageGuidance, pageUrl, isPlanSite]);
 
   // AI가 새 단계를 생성해 제공했을 때(또는 다음 미완료 단계가 생겼을 때) 자동으로 "위치로 이동" 실행
   const lastAutoSpotlightRef = useRef({ key: null, index: null });
@@ -706,28 +752,23 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
 
   if (!plan) return null;
 
-  // 같은 도메인의 모든 단계를 합쳐서 표시
+  // 같은 도메인의 모든 단계를 합쳐서 표시 (생성 시점 순서로 정렬)
   const getMergedGuidanceForDomain = useCallback((targetUrl) => {
     // 선택된 도메인 URL이 있으면 해당 도메인의 guidance 표시
     const displayUrl = targetUrl || pageUrl;
     if (!displayUrl) return null;
     
-    const targetDomain = getDomainFromUrl(displayUrl);
-    if (!targetDomain) return guidanceByUrl[displayUrl] || null;
-    
     // 같은 도메인의 모든 URL에서 단계 수집
     const allSteps = [];
-    const urlToSteps = {};
     
     for (const [url, guidance] of Object.entries(guidanceByUrl)) {
-      if (guidance?.steps?.length && isSameDomain(url, displayUrl)) {
-        urlToSteps[url] = guidance.steps;
+      if (guidance?.steps?.length && isSameSite(url, displayUrl)) {
         // 각 단계에 출처 URL 정보 추가
         guidance.steps.forEach((step, idx) => {
           // 잘못된 단계 필터링: {"steps": []} 같은 JSON 문자열이 텍스트로 저장된 경우 제외
           if (step.text && (
             step.text.trim().startsWith('{"steps"') || 
-            step.text.trim().startsWith('{"') && step.text.includes('"steps"')
+            (step.text.trim().startsWith('{"') && step.text.includes('"steps"'))
           )) {
             return; // 잘못된 단계는 건너뛰기
           }
@@ -741,17 +782,23 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     }
     
     if (allSteps.length === 0) return null;
+
+    // createdAt 기준으로 정렬 (없으면 오래된 것으로 간주)
+    allSteps.sort((a, b) => {
+      const aTime = typeof a.createdAt === 'number' ? a.createdAt : 0;
+      const bTime = typeof b.createdAt === 'number' ? b.createdAt : 0;
+      return aTime - bTime;
+    });
     
-    return {
-      steps: allSteps,
-      urlToSteps, // URL별 단계 매핑 (완료 상태 관리용)
-    };
+    return { steps: allSteps };
   }, [pageUrl, guidanceByUrl]);
 
   // 선택된 도메인이 있으면 해당 도메인의 guidance, 없으면 현재 페이지의 guidance
   const mergedGuidance = getMergedGuidanceForDomain(selectedDomainUrl);
   const pageGuidance = mergedGuidance || (pageUrl ? guidanceByUrl[pageUrl] : null);
-  const loadingGuide = pageUrl && loadingGuideUrl === pageUrl;
+  // 로딩 상태도 "현재 표시 중인 사이트(툴)" 기준으로 표시
+  const displayUrlForGuidance = selectedDomainUrl || pageUrl;
+  const loadingGuide = displayUrlForGuidance && loadingGuideUrl && isSameSite(loadingGuideUrl, displayUrlForGuidance);
   const { progressPct, stepDoneByToolId, totalDomains, doneDomains } = computeProgressFromAiSteps(plan, pageStepCompletions, guidanceByUrl, domainCompletions);
   const isAllDone = totalDomains > 0 && doneDomains === totalDomains;
 
@@ -771,17 +818,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
       return matchingStep.toolName || matchingStep.name || plan.tools?.find(t => t.id === matchingStep.toolId)?.name;
     }
     
-    // 매칭되는 step이 없으면 도메인에서 추출
-    const domain = getDomainFromUrl(displayUrl);
-    if (domain) {
-      // 도메인에서 서브도메인 제거 (예: www.github.com -> github.com)
-      const parts = domain.split('.');
-      if (parts.length > 2) {
-        return parts.slice(-2).join('.').split('.')[0]; // github.com -> github
-      }
-      return parts[0]; // github.com -> github
-    }
-    
+    // 플랜에 없는 도메인은 제목에 별도 이름을 표시하지 않음
     return null;
   }, [pageUrl, plan]);
 
@@ -897,7 +934,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
               </button>
             </div>
           )}
-          {!loadingGuide && (
+          {!loadingGuide && isPlanSite && (
             <button type="button" className="btn-primary btn-guidance-request" onClick={handleRequestPageGuidance}>
               {pageGuidance?.steps?.length ? '✨ ' + chrome.i18n.getMessage('guideNextStep') : '✨ ' + chrome.i18n.getMessage('guideGetGuidance')}
             </button>

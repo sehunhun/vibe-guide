@@ -13,6 +13,17 @@ export default function Chat({ plan, currentTab }) {
   const [error, setError] = useState(null);
   const bottomRef = useRef(null);
 
+  function renderTextWithLineBreaks(text) {
+    const safe = String(text ?? '');
+    const lines = safe.split('\n');
+    return lines.map((line, idx) => (
+      <React.Fragment key={idx}>
+        {line}
+        {idx < lines.length - 1 && <br />}
+      </React.Fragment>
+    ));
+  }
+
   const disabled = !currentTab?.tabId || !plan || loading;
 
    // 초기 로드시 이전 채팅 불러오기
@@ -116,7 +127,7 @@ export default function Chat({ plan, currentTab }) {
             className={`chat-message ${m.role === 'assistant' ? 'assistant' : 'user'}`}
           >
             <div className="chat-bubble">
-              {m.text}
+              {renderTextWithLineBreaks(m.text)}
             </div>
           </div>
         ))}

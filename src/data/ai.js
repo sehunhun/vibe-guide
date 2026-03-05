@@ -132,6 +132,13 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
       '',
       '**중요**: 위 가이드 문서의 내용을 참고하여, 사용자가 실제로 수행할 수 있는 구체적인 단계를 안내해주세요. 가이드 문서에 나와있는 기능이나 버튼, 메뉴 등을 정확히 언급하세요.'
     );
+    // 가이드에 "조회해야 할 값과 그 위치"가 있으면: 목표 URL로 가기 위한 클릭을 현재 URL + axtree(href 등)로 안내
+    if (domainGuide.includes('조회해야 할 값과 그 위치') && pageContext.type === 'axtree') {
+      userParts.push(
+        '',
+        '**목표 페이지로의 이동**: 가이드의 "조회해야 할 값과 그 위치"에 적힌 URL(또는 경로)이 있으면, 그 페이지에 도달하기 위해 **현재 페이지의 링크·버튼 목록(아래 axtree의 href, name)**을 보고, **다음에 어떤 링크나 버튼을 클릭할지** 한 단계만 안내하세요. 현재 URL과 요소들의 href를 비교해, 목표 경로로 이어지는 클릭을 직관적으로 골라주세요. (예: "Settings 링크를 클릭하세요", "왼쪽 메뉴에서 API를 클릭하세요")'
+      );
+    }
   }
 
   // 데모 모드일 때 데모 가이드 추가 (반드시 참고해야 함)
@@ -153,7 +160,27 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
       return `${i + 1}) ${s.text} ${status}`;
     });
     userParts.push('## 이 페이지에 대해 이전에 안내한 단계와 달성 여부', lines.join('\n'));
-    
+
+    // axtree 모드일 때는 이미 사용된 backendDOMNodeId 목록을 함께 알려주고, 다시 선택하지 말라고 지시
+    if (pageContext.type === 'axtree') {
+      const usedBackendIds = Array.from(
+        new Set(
+          previousStepsForUrl.steps
+            .map((s) => s.backendDOMNodeId)
+            .filter((id) => id != null && Number.isFinite(Number(id)))
+            .map((id) => Number(id)),
+        ),
+      );
+      if (usedBackendIds.length > 0) {
+        userParts.push(
+          '## 이미 사용된 backendDOMNodeId (다시 선택 금지)',
+          usedBackendIds.join(', '),
+          '',
+          '**중요**: 아래 axtree slim JSON에서 단계를 생성할 때, 위에 나열된 backendDOMNodeId 값들은 이미 이전 단계에서 사용되었으므로 **다시 선택하지 마세요.** 항상 새로운 backendDOMNodeId를 선택해 새 요소를 안내해야 합니다.',
+        );
+      }
+    }
+
     // 완료되지 않은 첫 번째 단계의 인덱스 찾기
     const firstIncompleteIndex = completed.findIndex((done, idx) => !done && idx < previousStepsForUrl.steps.length);
     if (firstIncompleteIndex >= 0) {
@@ -221,8 +248,8 @@ export function buildChatPrompt(
   const planText = formatPlan(plan);
 
   const languageStyle = locale === 'ko'
-    ? '- 가능한 한 쉬운 한국어를 사용하세요.\n- 개발 용어가 나오면 일상적인 비유와 함께 풀어서 설명하세요.\n- 버튼, 메뉴, 입력칸 이름을 그대로 언급하되, 그게 무슨 역할을 하는지 같이 설명하세요.'
-    : '- Use simple English.\n- When technical terms appear, explain them with everyday analogies.\n- Mention button, menu, and input names as shown, and explain what they do.';
+    ? '- 가능한 한 쉬운 한국어를 사용하세요.\n- 버튼, 메뉴, 입력칸 이름을 그대로 언급하되, 그게 무슨 역할을 하는지 같이 설명하세요.'
+    : '- Use simple English.\n- Mention button, menu, and input names as shown, and explain what they do.';
 
   const system = [
     '# role',
@@ -273,7 +300,14 @@ export function buildChatPrompt(
         currentQuestion: '## 사용자의 현재 질문',
         noQuestion: '(질문 없음)',
         replyGuide: '**답변 지침**',
-        replyBullets: '- 개발 용어를 최대한 풀어서 설명하고, 필요한 경우 예시를 들어주세요.\n- 단계 지시보다는, 화면에 보이는 요소가 무슨 역할을 하는지 중심으로 설명해주세요.\n- 짧고 명확하게 답변하세요.',
+        replyBullets:
+          '- 개발 용어를 최대한 풀어서 설명하고, 필요한 경우 예시를 들어주세요.\n'
+          + '- 단계 지시보다는, 화면에 보이는 요소가 무슨 역할을 하는지 중심으로 설명해주세요.\n'
+          + '- 목록은 "-" 또는 "·"로 시작하는 개조식으로 작성하세요.\n'
+          + '- 순서나 개수가 중요한 경우 "1., 2., 3." 형식의 번호 목록을 사용하세요.\n'
+          + '- 경로, 인과, 대소 관계는 "A → B", "A > B"처럼 화살표/부등호를 사용해 표현하세요.\n'
+          + '- 계층 구조는 들여쓰기를 사용해 트리 구조로 표현하세요.\n'
+          + '- 짧고 명확하게 답변하세요.',
       };
 
   const userParts = [
@@ -557,10 +591,36 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
   const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
   const slimNodes = pageContext.type === 'axtree' ? pageContext.nodes : null;
 
+  // 기존 단계에 사용된 backendDOMNodeId 집합 (중복 재요청 시 사용)
+  const existingBackendNodeIds = new Set();
+  if (context?.previousStepsForUrl?.steps?.length) {
+    for (const s of context.previousStepsForUrl.steps) {
+      const id = s.backendDOMNodeId;
+      if (id != null && Number.isFinite(Number(id))) existingBackendNodeIds.add(Number(id));
+    }
+  }
+  function isDuplicateBackendId(step, idSet) {
+    const id = step.backendDOMNodeId;
+    if (id == null) return false;
+    return idSet.has(Number(id));
+  }
+
+  // 완료된 step_text와 동일한 단계 제거 (최종 반환 직전에 한 번만 적용)
+  function applyStepTextFilter(res) {
+    if (!res?.steps?.length || !context?.previousStepsForUrl?.steps?.length || !Array.isArray(context.previousStepsForUrl.completed)) return res;
+    const completedTexts = new Set(
+      context.previousStepsForUrl.steps
+        .map((s, i) => (context.previousStepsForUrl.completed[i] ? String(s.text || '').trim() : ''))
+        .filter(Boolean)
+    );
+    res.steps = res.steps.filter((s) => !completedTexts.has(String(s.text || '').trim()));
+    return res;
+  }
+
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const result = await callBackend(
+      let result = await callBackend(
         backendUrl,
         modelId,
         messages,
@@ -569,10 +629,43 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
         pageUrl,
         slimNodes
       );
-      if (!isParseFailureResult(result)) return result;
-      if (attempt < maxAttempts) {
-        console.warn(`[vibe-guide] AI 응답 파싱 실패, 재시도 ${attempt}/${maxAttempts}`);
+
+      if (isParseFailureResult(result)) {
+        if (attempt < maxAttempts) {
+          console.warn(`[vibe-guide] AI 응답 파싱 실패, 재시도 ${attempt}/${maxAttempts}`);
+        }
+        continue;
       }
+
+      // 응답 단계의 backendDOMNodeId가 기존 단계와 겹치면 모델 재호출 (최대 3번), 그래도 겹치면 도메인 완료
+      if (existingBackendNodeIds.size > 0 && result?.steps?.length > 0) {
+        const maxDupAttempts = 3;
+        for (let dupAttempt = 1; dupAttempt <= maxDupAttempts; dupAttempt++) {
+          if (dupAttempt > 1) {
+            result = await callBackend(
+              backendUrl,
+              modelId,
+              messages,
+              pageContext.type,
+              imageDataUrl,
+              pageUrl,
+              slimNodes
+            );
+            if (isParseFailureResult(result)) break;
+          }
+          if (result.steps.length === 0) return applyStepTextFilter(result);
+          const hasDup = result.steps.some((s) => isDuplicateBackendId(s, existingBackendNodeIds));
+          if (!hasDup) return applyStepTextFilter(result);
+          if (dupAttempt < maxDupAttempts) {
+            console.warn(`[vibe-guide] 응답 backendDOMNodeId가 기존 단계와 중복, 재요청 (${dupAttempt}/${maxDupAttempts})`);
+          } else {
+            console.warn('[vibe-guide] backendDOMNodeId 중복 3회 연속 → 도메인 완료 처리');
+            return { steps: [] };
+          }
+        }
+      }
+
+      return applyStepTextFilter(result);
     } catch (err) {
       console.error(`[vibe-guide] 백엔드 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
       if (attempt >= maxAttempts) throw err;

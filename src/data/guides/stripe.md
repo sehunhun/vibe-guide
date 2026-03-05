@@ -1,16 +1,12 @@
 접속: https://dashboard.stripe.com
 
 ## 조회해야 할 값
-
 Publishable key (pk_...)
 Secret key (sk_...)
 
-## 주요 UI 탐색 경로
-
-1. 로그인
-2. 좌측 메뉴 → Developers
-3. API Keys 클릭
-4. Publishable key / Secret key 확인·복사
+- 위 두 값을 찾은 경우 이 페이지에서 할 일을 마칩니다.
+- 구체적인 반환 형식
+{ "steps": [] }
 
 ## 복사해야 할 환경변수
 

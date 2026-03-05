@@ -2,41 +2,44 @@
  * 도메인별 가이드 문서
  * 각 도메인에 대한 가이드 문서를 마크다운 형식으로 저장
  * AI 프롬프트 생성 시 참고 자료로 사용됨
- * 규칙: guides/{domainId}.md 파일만 추가하면 됨 (guides.js 수정 불필요)
+ * 백그라운드(서비스 워커)에서 동적 import가 불안정하므로 정적 import 사용
  */
 
+import demoGuide from './guides/demo-guide.md';
+import ga4Guide from './guides/ga4.md';
+import resendGuide from './guides/resend.md';
+import sanityGuide from './guides/sanity.md';
+import sentryGuide from './guides/sentry.md';
+import stripeGuide from './guides/stripe.md';
+import supabaseGuide from './guides/supabase.md';
+
+const GUIDE_MAP = {
+  'demo-guide': demoGuide,
+  ga4: ga4Guide,
+  resend: resendGuide,
+  sanity: sanityGuide,
+  sentry: sentryGuide,
+  stripe: stripeGuide,
+  supabase: supabaseGuide,
+};
+
 /**
- * 도메인 ID에 해당하는 가이드 문서 반환 (동적 import)
- * @param {string} domainId - 도메인 ID (예: 'google-ai-studio') → guides/{domainId}.md
+ * 도메인 ID에 해당하는 가이드 문서 반환
+ * @param {string} domainId - 도메인 ID (예: 'supabase')
  * @returns {Promise<string|null>} 가이드 문서 마크다운 또는 null
  */
 export async function getDomainGuide(domainId) {
   if (!domainId || typeof domainId !== 'string') return null;
-  try {
-    const mod = await import(
-      /* webpackChunkName: "guide-[request]" */
-      `./guides/${domainId}.md`
-    );
-    return mod.default ?? null;
-  } catch {
-    return null;
-  }
+  const guide = GUIDE_MAP[domainId] ?? null;
+  return Promise.resolve(guide ?? null);
 }
 
 /**
- * 데모 모드용 가이드 문서 반환 (동적 import)
+ * 데모 모드용 가이드 문서 반환
  * @returns {Promise<string|null>}
  */
 export async function getDemoGuide() {
-  try {
-    const mod = await import(
-      /* webpackChunkName: "guide-demo" */
-      './guides/demo-guide.md'
-    );
-    return mod.default ?? null;
-  } catch {
-    return null;
-  }
+  return Promise.resolve(demoGuide ?? null);
 }
 
 /**

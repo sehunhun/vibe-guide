@@ -208,7 +208,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             },
             {
               text: chrome.i18n.getMessage('aiStudioStep3'),
-              selector: 'span[class="material-symbols-outlined notranslate ms-button-icon-symbol ng-star-inserted"]',
+              selector: 'button[aria-label="설정"]',
             },
             {
               text: chrome.i18n.getMessage('aiStudioStep4'),
