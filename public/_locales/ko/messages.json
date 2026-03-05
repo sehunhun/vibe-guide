@@ -26,7 +26,8 @@
   "surveyTitleServices": { "message": "선택한 서비스" },
   "surveyHintServices": { "message": "도구를 누르면 설명이 펼쳐져요" },
   "surveyReasonLabel": { "message": "이번에 쓰는 이유:" },
-  "surveyBtnStart": { "message": "가이드 시작하기" },
+  "surveyBtnStart": { "message": "프롬프트 복사 & 시작하기" },
+  "surveyCopiedNotice": { "message": "복사되었습니다!" },
   "surveyBtnNext": { "message": "다음" },
   "surveyBtnLoading": { "message": "추천 받는 중…" },
   "surveyBtnPrev": { "message": "이전" },
@@ -66,6 +67,13 @@
   "guideIncompleteHint": { "message": "해당 단계를 완료한 후 다시 시도해주세요." },
   "guideClose": { "message": "닫기" },
   "guideCompletionMessage": { "message": "이 페이지에서 할 일이 완료 되었습니다!" },
+  "guideGoToNextPage": { "message": "다음 페이지로 넘어가기" },
+
+  "stepExplainTitle": { "message": "이 단계가 중요한 이유" },
+  "stepExplainAsk": { "message": "이 단계 더 물어보기" },
+  "stepExplainPlaceholder": { "message": "이 단계에서 추가로 궁금한 점을 적어주세요." },
+  "stepExplainSend": { "message": "질문 보내기" },
+  "stepExplainLoading": { "message": "이 단계를 설명하는 중이에요…" },
 
   "settingsBack": { "message": "돌아가기" },
   "settingsTitle": { "message": "AI 설정" },

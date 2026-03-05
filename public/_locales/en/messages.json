@@ -26,7 +26,8 @@
   "surveyTitleServices": { "message": "Selected services" },
   "surveyHintServices": { "message": "Click a service to see its description" },
   "surveyReasonLabel": { "message": "Why we use it:" },
-  "surveyBtnStart": { "message": "Start guide" },
+  "surveyBtnStart": { "message": "Copy prompt & Start guide" },
+  "surveyCopiedNotice": { "message": "Copied!" },
   "surveyBtnNext": { "message": "Next" },
   "surveyBtnLoading": { "message": "Getting recommendations…" },
   "surveyBtnPrev": { "message": "Back" },
@@ -66,6 +67,13 @@
   "guideIncompleteHint": { "message": "Complete that step and try again." },
   "guideClose": { "message": "Close" },
   "guideCompletionMessage": { "message": "All done on this page!" },
+  "guideGoToNextPage": { "message": "Go to next page" },
+
+  "stepExplainTitle": { "message": "Why this step matters" },
+  "stepExplainAsk": { "message": "Ask more about this step" },
+  "stepExplainPlaceholder": { "message": "Type any follow-up question you have about this step." },
+  "stepExplainSend": { "message": "Ask" },
+  "stepExplainLoading": { "message": "Explaining this step…" },
 
   "settingsBack": { "message": "Back" },
   "settingsTitle": { "message": "AI settings" },

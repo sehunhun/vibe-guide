@@ -15,6 +15,13 @@ import { Checkbox } from '../components/ui/checkbox.jsx';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion.jsx';
 import { cn } from '../lib/utils.js';
 
+/** 아이콘이 이미지 URL이면 <img>, 아니면 텍스트/이모지 렌더 (URL이 텍스트로 안 나오게) */
+function ServiceIcon({ icon, className = 'h-4 w-4 object-contain' }) {
+  const isUrl = icon && typeof icon === 'string' && /^https?:\/\//i.test(icon.trim());
+  if (isUrl) return <img src={icon.trim()} alt="" className={className} />;
+  return <>{icon ?? null}</>;
+}
+
 export default function Survey({ onComplete }) {
   const [step, setStep] = useState(0);
   const [siteGoal, setSiteGoal] = useState('');
@@ -23,6 +30,7 @@ export default function Survey({ onComplete }) {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expandedServiceId, setExpandedServiceId] = useState(null);
+  const [showCopiedNotice, setShowCopiedNotice] = useState(false);
 
   async function handleNext() {
     const text = (siteGoal || '').trim();
@@ -63,6 +71,26 @@ export default function Survey({ onComplete }) {
   async function handleGuideStart() {
     const selected = aiTools.filter(t => selectedToolIds.has(t.id));
     const payload = buildSurveyPayload({ siteGoal: siteGoal.trim(), selectedTools: selected });
+    const text = payload?.systemPrompt || '';
+    if (text) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text).catch(() => {});
+      } else {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch {}
+      }
+      setShowCopiedNotice(true);
+      setTimeout(() => setShowCopiedNotice(false), 1500);
+    }
     await storage.savePlan(payload);
     if (chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -155,7 +183,9 @@ export default function Survey({ onComplete }) {
               return (
                 <AccordionItem key={s.id} value={s.id} className="rounded-lg border border-border bg-card">
                   <AccordionTrigger className="px-3 py-2.5 text-sm font-medium hover:no-underline">
-                    <span className="mr-2">{s.icon}</span>
+                    <span className="mr-2 flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden">
+                      <ServiceIcon icon={s.icon} />
+                    </span>
                     {s.name}
                   </AccordionTrigger>
                   <AccordionContent className="px-3 pb-3 pt-0">
@@ -177,6 +207,11 @@ export default function Survey({ onComplete }) {
             })}
           </Accordion>
           <Button className="w-full" onClick={handleGuideStart}>
+            {showCopiedNotice && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] text-white">
+                ✓
+              </span>
+            )}
             {chrome.i18n.getMessage('surveyBtnStart')}
           </Button>
         </>

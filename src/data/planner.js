@@ -2,21 +2,37 @@ import { TOOLS, QUESTIONS, scoreTool } from './tools.js';
 import plannerKo from './planner.ko.json';
 import plannerEn from './planner.en.json';
 
+/** 서비스 id → favicon URL (survey/guide 아이콘용) */
+export const SERVICE_FAVICONS = {
+  'google-ai-studio': 'https://www.gstatic.com/aistudio/ai_studio_favicon_2_32x32.png',
+  supabase: 'https://supabase.com/favicon/apple-icon-57x57.png',
+  stripe: 'https://images.stripeassets.com/fzn2n1nzq965/1hgcBNd12BfT9VLgbId7By/01d91920114b124fb4cf6d448f9f06eb/favicon.svg',
+  vercel: 'https://assets.vercel.com/image/upload/q_auto/front/favicon/vercel/favicon.ico',
+  railway: 'https://railway.app/favicon.ico',
+  ga4: 'https://www.google.com/s2/favicons?domain=analytics.google.com&sz=128',
+  resend: 'https://resend.com/static/favicons/favicon-marketing.ico?v=1',
+  sentry: 'https://sentry.io/static/favicon-46f8676a36982f8eb852ac6860387755.ico',
+  sanity: 'https://www.sanity.io/static/images/favicons/android-icon-192x192.png?v=2',
+  firebase: 'https://www.gstatic.com/devrel-devsite/prod/v0aaaacbf0fa1137eef038c28cbf068bb36f5d76d975ff92c1063f1fc9a424af3/firebase/images/favicon.png',
+  github: 'https://github.com/fluidicon.png',
+  strapi: 'https://strapi.io/assets/favicon-16x16.png',
+};
+
 /**
- * 설문 requirement id → 실제 서비스 (이름, 아이콘, URL).
+ * 설문 requirement id → 실제 서비스 (이름, 아이콘=favicon URL, URL).
  * 여러 requirement가 같은 서비스로 매핑됨 (db/storage/login → Supabase).
  */
 export const REQUIREMENT_TO_SERVICE = {
-  db: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
-  storage: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
-  login: { id: 'supabase', name: 'Supabase', icon: '🔷', url: 'https://supabase.com' },
-  payment: { id: 'stripe', name: 'Stripe', icon: '💳', url: 'https://stripe.com' },
-  'frontend-hosting': { id: 'vercel', name: 'Vercel', icon: '▲', url: 'https://vercel.com' },
-  'backend-hosting': { id: 'railway', name: 'Railway', icon: '🚂', url: 'https://railway.app' },
-  analytics: { id: 'ga4', name: 'GA4', icon: '📊', url: 'https://analytics.google.com' },
-  email: { id: 'resend', name: 'Resend', icon: '📧', url: 'https://resend.com' },
-  monitoring: { id: 'sentry', name: 'Sentry', icon: '🛡️', url: 'https://sentry.io' },
-  'headless-cms': { id: 'sanity', name: 'Sanity', icon: '📝', url: 'https://sanity.io' },
+  db: { id: 'supabase', name: 'Supabase', icon: SERVICE_FAVICONS.supabase, url: 'https://supabase.com' },
+  storage: { id: 'supabase', name: 'Supabase', icon: SERVICE_FAVICONS.supabase, url: 'https://supabase.com' },
+  login: { id: 'supabase', name: 'Supabase', icon: SERVICE_FAVICONS.supabase, url: 'https://supabase.com' },
+  payment: { id: 'stripe', name: 'Stripe', icon: SERVICE_FAVICONS.stripe, url: 'https://stripe.com' },
+  'frontend-hosting': { id: 'vercel', name: 'Vercel', icon: SERVICE_FAVICONS.vercel, url: 'https://vercel.com' },
+  'backend-hosting': { id: 'railway', name: 'Railway', icon: SERVICE_FAVICONS.railway, url: 'https://railway.app' },
+  analytics: { id: 'ga4', name: 'GA4', icon: SERVICE_FAVICONS.ga4, url: 'https://analytics.google.com' },
+  email: { id: 'resend', name: 'Resend', icon: SERVICE_FAVICONS.resend, url: 'https://resend.com' },
+  monitoring: { id: 'sentry', name: 'Sentry', icon: SERVICE_FAVICONS.sentry, url: 'https://sentry.io' },
+  'headless-cms': { id: 'sanity', name: 'Sanity', icon: SERVICE_FAVICONS.sanity, url: 'https://sanity.io' },
 };
 
 let _plannerLocale = 'en';
@@ -130,9 +146,11 @@ function buildDemoPlan(answers) {
 
   const roles = getPlannerMessages().toolRoles;
   const demo = getPlannerMessages().demoSteps;
+  const googleLogo = SERVICE_FAVICONS['google-ai-studio'] || googleTool.logo;
+  const vercelLogo = SERVICE_FAVICONS.vercel || vercelTool.logo;
   const toolsWithOrder = [
-    { ...googleTool, ...roles['google-ai-studio'], order: 1, score: 100 },
-    { ...vercelTool, ...roles.vercel, order: 2, score: 100 },
+    { ...googleTool, ...roles['google-ai-studio'], logo: googleLogo, order: 1, score: 100 },
+    { ...vercelTool, ...roles.vercel, logo: vercelLogo, order: 2, score: 100 },
   ];
 
   const steps = [
@@ -140,7 +158,7 @@ function buildDemoPlan(answers) {
       stepId: 'demo_google_landing',
       toolId: 'google-ai-studio',
       toolName: googleTool.name,
-      toolIcon: googleTool.logo,
+      toolIcon: googleLogo,
       order: 0,
       status: 'pending',
       title: demo.googleLanding.title,
@@ -152,7 +170,7 @@ function buildDemoPlan(answers) {
       stepId: 'demo_vercel_deploy',
       toolId: 'vercel',
       toolName: vercelTool.name,
-      toolIcon: vercelTool.logo,
+      toolIcon: vercelLogo,
       order: 1,
       status: 'pending',
       title: demo.vercelDeploy.title,
@@ -290,6 +308,12 @@ export function buildSurveyPayload(surveyResult) {
 export function buildPlanFromSurveyTools(surveyResult) {
   const services = getUniqueServicesFromSelectedTools(surveyResult.selectedTools || []);
 
+  // Vercel(프론트엔드 호스팅)은 항상 마지막 순서로 배치
+  const vercelService = services.find(s => s.id === 'vercel');
+  const orderedServices = vercelService
+    ? [...services.filter(s => s.id !== 'vercel'), vercelService]
+    : services;
+
   // 항상 맨 앞에 Google AI Studio를 하나의 도메인으로 포함
   const toolsWithOrder = [];
 
@@ -298,7 +322,7 @@ export function buildPlanFromSurveyTools(surveyResult) {
     toolsWithOrder.push({
       id: googleTool.id,
       name: googleTool.name,
-      logo: googleTool.logo,
+      logo: SERVICE_FAVICONS['google-ai-studio'] || googleTool.logo,
       // 실제로 사용하는 앱 화면으로 바로 이동
       url: 'https://aistudio.google.com/apps',
       role: googleTool.name,
@@ -306,7 +330,7 @@ export function buildPlanFromSurveyTools(surveyResult) {
     });
   }
 
-  services.forEach((s) => {
+  orderedServices.forEach((s) => {
     toolsWithOrder.push({
       id: s.id,
       name: s.name,

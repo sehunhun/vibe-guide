@@ -8,14 +8,49 @@ export default function Chat({ plan, currentTab }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [segmentIndexMap, setSegmentIndexMap] = useState({});
   const bottomRef = useRef(null);
 
-  function renderTextWithLineBreaks(text) {
+  function renderInlineFormatting(text) {
     const safe = String(text ?? '');
+    const nodes = [];
+    const regex = /\*\*(.+?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(safe)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(safe.slice(lastIndex, match.index));
+      }
+      nodes.push(<strong key={`b-${lastIndex}`}>{match[1]}</strong>);
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < safe.length) {
+      nodes.push(safe.slice(lastIndex));
+    }
+
+    return nodes.length > 0 ? nodes : safe;
+  }
+
+  function splitAnswerSegments(text) {
+    const safe = String(text ?? '');
+    // AI가 넣어주는 "<page>" 마커 기준으로 페이징
+    const parts = safe
+      .split(/<page>/gi)
+      .map(p => p.trim())
+      .filter(Boolean);
+    return parts.length > 0 ? parts : [safe.trim()];
+  }
+
+  function renderTextWithLineBreaks(text) {
+    const safe = String(text ?? '')
+      .replace(/\r\n/g, '\n')
+      .replace(/<br\s*\/?>/gi, '\n');
     const lines = safe.split('\n');
     return lines.map((line, idx) => (
       <React.Fragment key={idx}>
-        {line}
+        {renderInlineFormatting(line)}
         {idx < lines.length - 1 && <br />}
       </React.Fragment>
     ));
@@ -98,28 +133,93 @@ export default function Chat({ plan, currentTab }) {
           <p>{chrome.i18n.getMessage('chatExample')}</p>
         </div>
 
-        {messages.map(m => (
-          <div
-            key={m.id}
-            className={cn(
-              'flex flex-col',
-              m.role === 'user' ? 'items-end' : 'items-start'
-            )}
-          >
-            <Card
+        {messages.map(m => {
+          const isAssistant = m.role === 'assistant';
+          const rawText = String(m.text ?? '');
+          const segments = isAssistant ? splitAnswerSegments(rawText) : [rawText];
+          const totalSegments = segments.length;
+          const currentIndexRaw = segmentIndexMap[m.id] ?? 0;
+          const currentIndex = Math.min(Math.max(currentIndexRaw, 0), totalSegments - 1);
+          const activeText = segments[currentIndex] ?? '';
+
+          const showPager = isAssistant && totalSegments > 1;
+
+          const goToPrev = () => {
+            if (!showPager || currentIndex === 0) return;
+            setSegmentIndexMap(prev => ({
+              ...prev,
+              [m.id]: currentIndex - 1,
+            }));
+          };
+
+          const goToNext = () => {
+            if (!showPager || currentIndex >= totalSegments - 1) return;
+            setSegmentIndexMap(prev => ({
+              ...prev,
+              [m.id]: currentIndex + 1,
+            }));
+          };
+
+          return (
+            <div
+              key={m.id}
               className={cn(
-                'max-w-[90%]',
-                m.role === 'user'
-                  ? 'border-primary/30 bg-primary/10'
-                  : 'bg-muted/50'
+                'flex flex-col',
+                m.role === 'user' ? 'items-end' : 'items-start'
               )}
             >
-              <CardContent className="px-3 py-2 text-xs leading-relaxed">
-                {renderTextWithLineBreaks(m.text)}
-              </CardContent>
-            </Card>
-          </div>
-        ))}
+              <Card
+                className={cn(
+                  'max-w-[90%]',
+                  m.role === 'user'
+                    ? 'border-primary/30 bg-primary/10'
+                    : 'bg-muted/50'
+                )}
+              >
+                <CardContent className="px-3 py-2 text-xs leading-relaxed">
+                  {showPager && (
+                    <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>
+                        {currentIndex + 1} / {totalSegments}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={goToPrev}
+                          disabled={currentIndex === 0}
+                          className={cn(
+                            'rounded px-1 py-0.5 transition-colors',
+                            currentIndex === 0
+                              ? 'cursor-not-allowed opacity-40'
+                              : 'hover:bg-muted'
+                          )}
+                          aria-label="이전 구간"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={goToNext}
+                          disabled={currentIndex >= totalSegments - 1}
+                          className={cn(
+                            'rounded px-1 py-0.5 transition-colors',
+                            currentIndex >= totalSegments - 1
+                              ? 'cursor-not-allowed opacity-40'
+                              : 'hover:bg-muted'
+                          )}
+                          aria-label="다음 구간"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {renderTextWithLineBreaks(activeText)}
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })}
 
         {loading && (
           <div className="flex flex-col items-start">

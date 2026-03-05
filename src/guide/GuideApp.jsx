@@ -230,7 +230,11 @@ export default function GuideApp() {
               >
                 <div className="group-left">
                   <span className="group-order">{gIdx + 1}</span>
-                  <span className="group-icon">{group.toolIcon}</span>
+                  <span className="group-icon">
+                  {typeof group.toolIcon === 'string' && group.toolIcon.startsWith('http')
+                    ? <img src={group.toolIcon} alt="" className="h-4 w-4 object-contain" />
+                    : group.toolIcon}
+                </span>
                   <div className="group-info">
                     <span className="group-name">{group.toolName}</span>
                     {toolInfo?.role && <span className="group-role">{toolInfo.role}</span>}

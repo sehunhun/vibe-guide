@@ -39,6 +39,7 @@ class Step(BaseModel):
     backendDOMNodeId: Optional[int] = None
     text: Optional[str] = None  # 하위 호환 표시용 (step_text 와 동일)
     selector: Optional[str] = None  # 하위 호환
+    explain: Optional[str] = None  # 단계에 대한 추가 설명 (왜 이 단계를 수행해야 하는지 등)
 
 
 class GuidanceRequest(BaseModel):
@@ -49,10 +50,13 @@ class GuidanceRequest(BaseModel):
     page_context_content: Optional[str] = None  # HTML 또는 base64 이미지 (axtree 시 미사용)
     page_url: Optional[str] = None  # axtree 시 참고용
     slim_nodes: Optional[List[dict]] = None  # axtree 시 필수: 접근성 트리 slim 목록
+    no_steps_for_domain: bool = False  # 해당 도메인에 저장된 단계가 없을 때 True → 1차 요청에서 web_search 강제
+    previous_web_search_result: Optional[str] = None  # 이전에 저장한 웹 검색 결과 (이후 스텝에서 참고)
 
 
 class GuidanceResponse(BaseModel):
     steps: List[Step]
+    web_search_context: Optional[str] = None  # 이번 요청에서 웹 검색한 결과 요약 (클라이언트가 도메인별로 저장)
 
 
 # --- 자유 대화용 모델 ---
@@ -135,8 +139,12 @@ GUIDANCE_AXTREE_JSON_SCHEMA = {
                 "properties": {
                     "step_text": {"type": "string", "description": "다음 단계 안내 문장"},
                     "backendDOMNodeId": {"type": ["integer", "null"], "description": "선택한 요소의 backendDOMNodeId (slim 목록에 있는 값)"},
+                    "explain": {
+                        "type": "string",
+                        "description": "이 단계에서 다루는 UI 요소를 비개발자도 이해할 수 있도록 풀어서 설명하고, 전체 플로우에서 왜 이 단계를 수행해야 하는지 2~3문장으로 설명",
+                    },
                 },
-                "required": ["step_text", "backendDOMNodeId"],
+                "required": ["step_text", "backendDOMNodeId", "explain"],
                 "additionalProperties": False,
             },
         },
@@ -235,6 +243,16 @@ async def get_guidance(request: GuidanceRequest):
                 + json.dumps(request.slim_nodes, ensure_ascii=False, indent=2)
             )
 
+        # 이전 웹 검색 결과가 있으면 프롬프트 앞에 붙여 이후 스텝에서 참고하도록 함
+        if request.previous_web_search_result and request.previous_web_search_result.strip():
+            user_content = (
+                "## 이전 웹 검색 결과 (참고)\n"
+                + request.previous_web_search_result.strip()
+                + "\n\n"
+                + user_content
+            )
+            logger.info("[guidance] previous_web_search_result 포함하여 요청")
+
         # Responses API 입력 형식 (system + user 메시지, web_search 도구 사용)
         user_content_items = [{"type": "input_text", "text": user_content}]
         if request.page_context_type == "image" and request.page_context_content:
@@ -243,6 +261,61 @@ async def get_guidance(request: GuidanceRequest):
                 image_url = f"data:image/png;base64,{image_url}"
             user_content_items.append({"type": "input_image", "image_url": image_url})
             logger.info("이미지 포함됨")
+
+        # 해당 도메인에 저장된 단계가 없을 때: 1차로 web_search 강제 호출 → 결과를 2차 요청에 넣어 단계 생성
+        web_search_context_to_return: Optional[str] = None
+        if request.no_steps_for_domain and not (request.previous_web_search_result and request.previous_web_search_result.strip()):
+            search_instruction = (
+                "\n\n[이 도메인에는 아직 저장된 단계가 없습니다. "
+                "사용자 플랜을 위해 이 도메인/서비스에서 조회해야 할 값과 조회 경로를 웹에서 검색한 뒤, 그 결과를 요약해 주세요.]"
+            )
+            search_user_items = [{"type": "input_text", "text": user_content + search_instruction}]
+            if request.page_context_type == "image" and request.page_context_content:
+                image_url = request.page_context_content
+                if not image_url.startswith("data:"):
+                    image_url = f"data:image/png;base64,{image_url}"
+                search_user_items.append({"type": "input_image", "image_url": image_url})
+            payload_search = {
+                "model": request.model,
+                "input": [
+                    {"role": "system", "content": [{"type": "input_text", "text": request.system}]},
+                    {"role": "user", "content": search_user_items},
+                ],
+                "tools": [{"type": "web_search"}],
+                "tool_choice": {"type": "allowed_tools", "mode": "required", "tools": [{"type": "web_search"}]},
+                "max_output_tokens": 2048,
+            }
+            logger.info("[guidance] 1차: no_steps_for_domain → web_search 강제 호출")
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                resp_search = await client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+                    json=payload_search,
+                )
+            if not resp_search.is_success:
+                try:
+                    err_data = resp_search.json()
+                    err_text = err_data.get("error", {}).get("message", resp_search.text)
+                except Exception:
+                    err_text = resp_search.text
+                logger.error(f"[guidance] 1차 web_search 요청 오류: {err_text}")
+                raise HTTPException(status_code=resp_search.status_code, detail=f"OpenAI API 오류 ({resp_search.status_code}): {err_text}")
+            data_search = resp_search.json()
+            web_search_context_to_return = _extract_output_text_from_responses_api(data_search)
+            if web_search_context_to_return:
+                logger.info(f"[guidance] 1차 웹 검색 결과 추출 (길이: {len(web_search_context_to_return)})")
+                user_content = (
+                    "## 이전 웹 검색 결과 (참고)\n"
+                    + web_search_context_to_return
+                    + "\n\n"
+                    + user_content
+                )
+                user_content_items = [{"type": "input_text", "text": user_content}]
+                if request.page_context_type == "image" and request.page_context_content:
+                    image_url = request.page_context_content
+                    if not image_url.startswith("data:"):
+                        image_url = f"data:image/png;base64,{image_url}"
+                    user_content_items.append({"type": "input_image", "image_url": image_url})
 
         payload = {
             "model": request.model,
@@ -312,13 +385,22 @@ async def get_guidance(request: GuidanceRequest):
                             backendDOMNodeId=s.get("backendDOMNodeId") if s.get("backendDOMNodeId") is not None else None,
                             text=(s.get("step_text") or "").strip(),
                             selector=None,
+                            explain=((s.get("explain") or "").strip() or None),
                         )
                         for s in steps_data
                         if (s.get("step_text") or "").strip()
                     ]
                 except json.JSONDecodeError as e:
                     logger.error(f"axtree 응답 JSON 파싱 실패: {e}")
-                    steps = [Step(step_text="안내를 생성하지 못했습니다. 다시 시도해 주세요.", backendDOMNodeId=None, text="안내를 생성하지 못했습니다. 다시 시도해 주세요.", selector=None)]
+                    steps = [
+                        Step(
+                            step_text="안내를 생성하지 못했습니다. 다시 시도해 주세요.",
+                            backendDOMNodeId=None,
+                            text="안내를 생성하지 못했습니다. 다시 시도해 주세요.",
+                            selector=None,
+                            explain=None,
+                        )
+                    ]
             else:
                 parsed = parse_ai_response(raw)
                 legacy_steps = parsed.get("steps", [])
@@ -333,7 +415,7 @@ async def get_guidance(request: GuidanceRequest):
                     if (s.get("text") or "").strip()
                 ]
             logger.info(f"파싱 완료: {len(steps)}개 단계")
-            return GuidanceResponse(steps=steps)
+            return GuidanceResponse(steps=steps, web_search_context=web_search_context_to_return)
             
     except HTTPException:
         raise

@@ -143,7 +143,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       try {
         const { tabId } = msg;
-        const storage = await chrome.storage.local.get(['plan', 'answers', 'pageGuidanceCache', 'pageStepCompletions']);
+        const storage = await chrome.storage.local.get(['plan', 'answers', 'pageGuidanceCache', 'pageStepCompletions', 'webSearchContextByDomain']);
         const plan = storage.plan || null;
         const answers = storage.answers || null;
         if (!plan) {
@@ -192,6 +192,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const previousStepsForUrl = allPreviousSteps.length > 0
           ? { steps: allPreviousSteps, completed: allCompleted }
           : undefined;
+
+        // 해당 도메인에 저장된 단계가 없으면 no_steps_for_domain; 이전 웹 검색 결과는 도메인별로 저장된 값 전달
+        const noStepsForDomain = !!currentDomain && allPreviousSteps.length === 0;
+        const previousWebSearchResult = (storage.webSearchContextByDomain && currentDomain && storage.webSearchContextByDomain[currentDomain]) || '';
 
         // Google AI Studio 전용: 하드코딩된 6단계 안내 (로케일별 문구 적용)
         const hostname = getDomainFromUrl(url);
@@ -250,11 +254,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         const locale = getUILocale();
         const result = await getPageGuidance(
-          { plan, answers, previousStepsForUrl },
+          {
+            plan,
+            answers,
+            previousStepsForUrl,
+            noStepsForDomain,
+            previousWebSearchResult,
+          },
           { type: pageContext.type, content: pageContext.content, nodes: pageContext.nodes },
           pageContext.url,
           locale,
         );
+        if (currentDomain && result.web_search_context) {
+          const byDomain = storage.webSearchContextByDomain || {};
+          byDomain[currentDomain] = result.web_search_context;
+          await chrome.storage.local.set({ webSearchContextByDomain: byDomain });
+        }
         return result;
       } catch (e) {
         return { error: e.message || chrome.i18n.getMessage('errorGuidanceFailed') };
@@ -266,7 +281,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'GET_PAGE_CHAT_ANSWER') {
     (async () => {
       try {
-        const { tabId, history, userMessage } = msg;
+        const { history, userMessage } = msg;
+        const resolvedTabId = msg.tabId != null ? msg.tabId : sender?.tab?.id;
+        if (!resolvedTabId) {
+          return { error: chrome.i18n.getMessage('errorChatPage') };
+        }
         const storage = await chrome.storage.local.get(['plan', 'answers', 'pageGuidanceCache', 'pageStepCompletions']);
         const plan = storage.plan || null;
         const answers = storage.answers || null;
@@ -276,13 +295,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         let pageContext;
         try {
-          pageContext = await getAxtreeSlim(tabId);
+          pageContext = await getAxtreeSlim(resolvedTabId);
           console.log('[vibe-guide] GET_PAGE_CHAT_ANSWER: axtree 사용 → slim JSON 포함');
         } catch (e) {
           const msgText = e?.message ?? String(e);
           const stack = e?.stack ? `\n${e.stack}` : '';
           console.warn('[vibe-guide] GET_PAGE_CHAT_ANSWER: axtree 실패 → URL만 사용. 사유:', msgText, stack);
-          const tab = await chrome.tabs.get(tabId);
+          const tab = await chrome.tabs.get(resolvedTabId);
           if (!tab?.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
             return { error: chrome.i18n.getMessage('errorChatPage') };
           }
@@ -339,7 +358,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'SPOTLIGHT_ELEMENT') {
-    const { tabId, selector, backendDOMNodeId } = msg;
+    const { tabId, selector, backendDOMNodeId, explain, stepKey } = msg;
     // 이전 스포트라이트/래퍼 제거 (컨텐츠 스크립트가 있으면 제거)
     chrome.tabs.sendMessage(tabId, { type: 'REMOVE_SPOTLIGHT' }).catch(() => {});
 
@@ -375,20 +394,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 sendResponse({ ok: false, error: chrome.runtime.lastError.message || '요소를 감싸지 못했습니다.' });
                 return;
               }
-              chrome.tabs.sendMessage(tabId, { type: 'SPOTLIGHT_WRAP_DONE' }, (response) => {
+              chrome.tabs.sendMessage(
+                tabId,
+                { type: 'SPOTLIGHT_WRAP_DONE', backendDOMNodeId: backendId, explain, stepKey },
+                (response) => {
                 if (chrome.runtime.lastError) {
                   sendResponse({ ok: false, error: chrome.runtime.lastError.message });
                 } else {
                   sendResponse(response ?? { ok: true });
                 }
-              });
+                },
+              );
             });
           });
         });
       });
     } else if (selector) {
       console.log('[vibe-guide] 스포트라이트 분기: backendDOMNodeId 없음 → selector로 Content에 SPOTLIGHT_ELEMENT', { selector: selector.slice(0, 60), tabId });
-      chrome.tabs.sendMessage(tabId, { type: 'SPOTLIGHT_ELEMENT', selector })
+      chrome.tabs.sendMessage(tabId, { type: 'SPOTLIGHT_ELEMENT', selector, explain, stepKey })
         .then(res => sendResponse(res ?? { ok: false }))
         .catch(() => sendResponse({ ok: false, error: '페이지와 통신할 수 없습니다.' }));
     } else {

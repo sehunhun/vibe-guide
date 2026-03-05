@@ -27,6 +27,7 @@ export default function SurveyApp() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expandedServiceId, setExpandedServiceId] = useState(null);
+  const [showCopiedNotice, setShowCopiedNotice] = useState(false);
 
   useEffect(() => {
     setPlannerLocale(getUILocale());
@@ -97,6 +98,26 @@ export default function SurveyApp() {
       siteGoal: siteGoal.trim(),
       selectedTools: selected,
     });
+    const text = payload?.systemPrompt || '';
+    if (text) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text).catch(() => {});
+      } else {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch {}
+      }
+      setShowCopiedNotice(true);
+      setTimeout(() => setShowCopiedNotice(false), 1500);
+    }
     await storage.savePlan(payload);
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -226,7 +247,11 @@ export default function SurveyApp() {
                 return (
                   <AccordionItem key={s.id} value={s.id} className="rounded-lg border border-border bg-card">
                     <AccordionTrigger className="px-4 py-3.5 text-left text-sm font-medium hover:no-underline">
-                      <span className="mr-2">{s.icon}</span>
+                      <span className="mr-2 flex h-4 w-4 shrink-0 items-center justify-center">
+                        {typeof s.icon === 'string' && s.icon.startsWith('http')
+                          ? <img src={s.icon} alt="" className="h-4 w-4 object-contain" />
+                          : s.icon}
+                      </span>
                       {s.name}
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4 pt-0">
@@ -288,6 +313,11 @@ export default function SurveyApp() {
               {chrome.i18n.getMessage('surveyBtnPrev')}
             </Button>
             <Button className="flex-1" onClick={handleGuideStart}>
+              {showCopiedNotice && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] text-white">
+                  ✓
+                </span>
+              )}
               {chrome.i18n.getMessage('surveyBtnStart')}
             </Button>
           </>

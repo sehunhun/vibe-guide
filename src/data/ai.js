@@ -100,7 +100,11 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
 응답은 반드시 다음 JSON만 출력하세요. 다른 설명은 붙이지 마세요.
 {
   "steps": [
-    { "text": "다음 단계 안내 문장 (예: 상단 '시작하기' 버튼을 클릭하세요)", "selector": "해당 요소의 CSS 선택자 또는 null" }
+    {
+      "text": "다음 단계 안내 문장 (예: 상단 '시작하기' 버튼을 클릭하세요)",
+      "selector": "해당 요소의 CSS 선택자 또는 null",
+      "explain": "이 단계에서 다루는 UI 요소가 어떤 역할을 하는지, 그리고 전체 플로우에서 왜 지금 이 단계를 수행해야 하는지 비개발자도 이해할 수 있도록 2~3문장으로 설명"
+    }
   ]
 }
 
@@ -111,7 +115,8 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
 4. **완료 상태 고려**: 이전 단계가 모두 완료되었다면, 그 다음 새로운 단계 하나를 생성하세요. 완료되지 않은 단계가 있다면, 그 단계를 다시 안내하거나 업데이트할 수 있습니다.
 5. **연속된 작업은 하나로 합치기**: "입력하세요"와 "제출하세요"처럼 연속된 작업은 별도 단계로 나누지 말고 하나의 단계로 합쳐서 안내하세요. 예: "입력하고 제출하세요" 또는 "입력 후 제출하세요".
 6. **행동 가능한 단계만 생성**: 실제로 사용자가 수행할 수 있는 인터랙션(클릭, 타이핑, 입력, 선택, 드래그 등)만 단계로 추가하세요. 단순히 "읽기", "확인하기", "보기", "참고하기" 같은 수동적인 행동은 단계로 포함하지 마세요. 예: "버튼을 클릭하세요", "텍스트를 입력하세요", "옵션을 선택하세요" 등.
-7. **선택자**: selector는 document.querySelector()로 찾을 수 있는 유효한 CSS 선택자여야 합니다. id, data 속성, 역할(button, a) 등을 우선 사용하세요. 찾기 어렵거나 해당 없으면 null.${languageRule}`;
+7. **선택자**: selector는 document.querySelector()로 찾을 수 있는 유효한 CSS 선택자여야 합니다. id, data 속성, 역할(button, a) 등을 우선 사용하세요. 찾기 어렵거나 해당 없으면 null.
+8. **explain 필드**: 각 단계마다, 해당 UI 요소가 어떤 기능을 하는지와 전체 웹사이트/서비스 제작 플로우에서 왜 이 단계를 지금 수행해야 하는지를 2~3문장으로 설명하세요. 비개발자도 이해할 수 있는 쉬운 한국어/영어로 작성하고, 가능한 한 구체적으로 작성합니다.${languageRule}`;
 
   const userParts = [
     `## 설문 요약`,
@@ -281,7 +286,12 @@ export function buildChatPrompt(
         currentQuestion: '## User\'s question',
         noQuestion: '(no question)',
         replyGuide: '**Reply guidelines**',
-        replyBullets: '- Explain technical terms in simple language; add examples if needed.\n- Focus on what each element does rather than step-by-step clicks.\n- Keep answers short and to the point.',
+        replyBullets:
+          '- Explain technical terms in simple language; add examples if needed.\n'
+          + '- Focus on what each element does rather than step-by-step clicks.\n'
+          + '- Keep answers short and to the point.\n'
+          + '- If the answer is long, split it into about 2–4 logical screens using a "<page>" marker between parts (e.g., first part...<page>second part...<page>third part...).\n'
+          + '- Aim for roughly 200–300 characters per screen (per <page> segment).',
       }
     : {
         surveySummary: '## 설문 요약',
@@ -307,7 +317,9 @@ export function buildChatPrompt(
           + '- 순서나 개수가 중요한 경우 "1., 2., 3." 형식의 번호 목록을 사용하세요.\n'
           + '- 경로, 인과, 대소 관계는 "A → B", "A > B"처럼 화살표/부등호를 사용해 표현하세요.\n'
           + '- 계층 구조는 들여쓰기를 사용해 트리 구조로 표현하세요.\n'
-          + '- 짧고 명확하게 답변하세요.',
+          + '- 짧고 명확하게 답변하세요.\n'
+          + '- 답변이 너무 길다면, 전체를 2~4개 정도의 화면으로 나누되, 각 화면 사이에 "<page>" 기호를 단독으로 넣어 구분하세요. (예: 첫 번째 설명...<page>두 번째 설명...<page>세 번째 설명...)\n'
+          + '- 한 화면(한 <page> 구간)은 대략 200~300자 정도 길이가 되도록 분리하세요.',
       };
 
   const userParts = [
@@ -412,8 +424,9 @@ export function getStoredAISettings() {
  * @param {string|null} imageDataUrl - image 시에만
  * @param {string} [pageUrl] - axtree 시 필수
  * @param {Array<object>} [slimNodes] - axtree 시 필수
+ * @param {{ no_steps_for_domain?: boolean, previous_web_search_result?: string }} [options]
  */
-async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl, pageUrl = '', slimNodes = null) {
+async function callBackend(backendUrl, modelId, messages, pageContextType, imageDataUrl, pageUrl = '', slimNodes = null, options = null) {
   if (!backendUrl || !backendUrl.trim()) {
     const msg = typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getMessage
       ? chrome.i18n.getMessage('errorBackendUrl')
@@ -435,6 +448,12 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
     body.page_url = pageUrl || null;
     body.slim_nodes = Array.isArray(slimNodes) ? slimNodes : null;
   }
+  if (options) {
+    if (options.no_steps_for_domain === true) body.no_steps_for_domain = true;
+    if (options.previous_web_search_result != null && String(options.previous_web_search_result).trim()) {
+      body.previous_web_search_result = String(options.previous_web_search_result).trim();
+    }
+  }
 
   const res = await fetch(apiUrl, {
     method: 'POST',
@@ -452,12 +471,13 @@ async function callBackend(backendUrl, modelId, messages, pageContextType, image
     text: s.step_text ?? s.text ?? '',
     selector: s.selector ?? null,
     backendDOMNodeId: s.backendDOMNodeId ?? null,
+    explain: s.explain ?? null,
   }));
   if (steps.length) {
     const kind = steps.some((s) => s.backendDOMNodeId != null) ? 'backendDOMNodeId' : 'selector';
     console.log('[vibe-guide] API 응답 단계:', steps.length, '개, 종류:', kind, steps.map((s) => ({ backendDOMNodeId: s.backendDOMNodeId, selector: s.selector ?? null })));
   }
-  return { steps };
+  return { steps, web_search_context: data.web_search_context ?? null };
 }
 
 /**
@@ -564,16 +584,16 @@ export function hasValidApiKey() {
 
 /**
  * AI API 호출 (background에서 사용)
- * @param {{ plan: object, answers: object }} context
+ * @param {{ plan: object, answers: object, noStepsForDomain?: boolean, previousWebSearchResult?: string }} context
  * @param {{ type: 'html'|'image', content: string }} pageContext
  * @param {string} pageUrl
  * @param {string} [locale] - 'en' | 'ko', 응답 언어 (생략 시 getUILocale())
- * @returns {Promise<{ steps: Array<{ text: string, selector: string|null }> }>}
+ * @returns {Promise<{ steps: Array<{ text: string, selector: string|null }>, web_search_context?: string }>}
  */
 export async function getPageGuidance(context, pageContext, pageUrl, locale) {
   const loc = locale ?? getUILocale();
   const { modelId, backendUrl } = await getStoredAISettings();
-  
+
   if (!backendUrl || !backendUrl.trim()) {
     const msg = typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getMessage
       ? chrome.i18n.getMessage('errorBackendUrl')
@@ -590,6 +610,11 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
   const messages = buildPrompt(context, pageContext, pageUrl, domainGuide, loc, demoGuideContent ?? undefined);
   const imageDataUrl = pageContext.type === 'image' ? pageContext.content : null;
   const slimNodes = pageContext.type === 'axtree' ? pageContext.nodes : null;
+
+  const backendOptions = {
+    no_steps_for_domain: context.noStepsForDomain === true,
+    previous_web_search_result: context.previousWebSearchResult ?? '',
+  };
 
   // 기존 단계에 사용된 backendDOMNodeId 집합 (중복 재요청 시 사용)
   const existingBackendNodeIds = new Set();
@@ -617,6 +642,13 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
     return res;
   }
 
+  function withWebSearchContext(stepsRes, webSearchContext) {
+    const out = { steps: stepsRes?.steps ?? stepsRes };
+    if (webSearchContext != null && String(webSearchContext).trim()) out.web_search_context = String(webSearchContext).trim();
+    return out;
+  }
+
+  let capturedWebSearchContext = null;
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -627,8 +659,10 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
         pageContext.type,
         imageDataUrl,
         pageUrl,
-        slimNodes
+        slimNodes,
+        backendOptions
       );
+      if (result.web_search_context != null) capturedWebSearchContext = result.web_search_context;
 
       if (isParseFailureResult(result)) {
         if (attempt < maxAttempts) {
@@ -649,30 +683,32 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
               pageContext.type,
               imageDataUrl,
               pageUrl,
-              slimNodes
+              slimNodes,
+              backendOptions
             );
+            if (result.web_search_context != null) capturedWebSearchContext = result.web_search_context;
             if (isParseFailureResult(result)) break;
           }
-          if (result.steps.length === 0) return applyStepTextFilter(result);
+          if (result.steps.length === 0) return withWebSearchContext(applyStepTextFilter(result), capturedWebSearchContext);
           const hasDup = result.steps.some((s) => isDuplicateBackendId(s, existingBackendNodeIds));
-          if (!hasDup) return applyStepTextFilter(result);
+          if (!hasDup) return withWebSearchContext(applyStepTextFilter(result), capturedWebSearchContext);
           if (dupAttempt < maxDupAttempts) {
             console.warn(`[vibe-guide] 응답 backendDOMNodeId가 기존 단계와 중복, 재요청 (${dupAttempt}/${maxDupAttempts})`);
           } else {
             console.warn('[vibe-guide] backendDOMNodeId 중복 3회 연속 → 도메인 완료 처리');
-            return { steps: [] };
+            return withWebSearchContext({ steps: [] }, capturedWebSearchContext);
           }
         }
       }
 
-      return applyStepTextFilter(result);
+      return withWebSearchContext(applyStepTextFilter(result), capturedWebSearchContext);
     } catch (err) {
       console.error(`[vibe-guide] 백엔드 API 호출 실패 (시도 ${attempt}/${maxAttempts}):`, err);
       if (attempt >= maxAttempts) throw err;
     }
   }
 
-  return { steps: [{ text: getParseFailureMessage(), selector: null }] };
+  return withWebSearchContext({ steps: [{ text: getParseFailureMessage(), selector: null }] }, capturedWebSearchContext);
 }
 
 /**

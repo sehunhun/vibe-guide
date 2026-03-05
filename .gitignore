@@ -34,3 +34,11 @@ env/
 venv/
 ENV/
 .venv
+
+# Backend generated data
+backend/scripts/
+backend/snapshots/
+docs/
+
+# Cursor
+.cursor/

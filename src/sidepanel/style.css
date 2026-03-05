@@ -32,13 +32,26 @@
     padding: 0;
   }
 
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
     width: 360px;
-    min-height: 100vh;
-    overflow-x: hidden;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
     font-size: 13px;
+  }
+
+  #root {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   button:not(:disabled),
@@ -47,24 +60,23 @@
   }
 }
 
-/* Sidepanel layout */
+/* Sidepanel layout: 헤더 고정, 메인만 스크롤 */
 .app {
-  @apply flex h-screen flex-col;
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 뷰포트 높이 고정 → app-main이 남은 영역에서 스크롤 */
+  min-height: 0;
 }
 
 .app-header {
-  @apply sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-4 py-3;
+  flex-shrink: 0;
+  @apply z-10 flex items-center justify-between border-b border-border bg-card px-4 py-3;
 }
 
 .app-main {
-  @apply flex min-h-0 flex-1 flex-col overflow-y-auto p-4;
-}
-
-.app-main > .tabs-wrapper {
-  @apply shrink-0;
-}
-
-.app-main > [data-guide-content],
-.app-main > [data-chat-content] {
-  @apply flex min-h-0 flex-1 flex-col;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  @apply flex flex-col p-4;
 }

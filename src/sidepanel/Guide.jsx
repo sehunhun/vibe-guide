@@ -5,6 +5,13 @@ import { Progress } from '../components/ui/progress.jsx';
 import { Badge } from '../components/ui/badge.jsx';
 import { cn } from '../lib/utils.js';
 
+/** 아이콘이 이미지 URL이면 <img>, 아니면 텍스트/이모지 (URL이 텍스트로 안 나오게) */
+function ToolIcon({ icon, className = 'h-4 w-4 object-contain' }) {
+  const isUrl = icon && typeof icon === 'string' && /^https?:\/\//i.test(icon.trim());
+  if (isUrl) return <img src={icon.trim()} alt="" className={className} />;
+  return <>{icon ?? null}</>;
+}
+
 /**
  * Guide - Step2 메인 화면
  * - plan의 steps를 툴별로 그룹화해서 보여줌
@@ -79,6 +86,56 @@ function isSameSite(url1, url2) {
   const tool2 = getToolIdForUrl(url2);
   if (tool1 && tool2) return tool1 === tool2;
   return isSameDomain(url1, url2);
+}
+
+/** 1초 대기 후 탭이 complete 될 때까지 기다렸다가 콜백 실행. 무한 대기 방지용 최대 대기 후에도 실행 */
+const NEXT_STEP_INITIAL_DELAY_MS = 1000;
+const NEXT_STEP_MAX_WAIT_MS = 8000;
+
+function scheduleNextStepAfterPageReady(onReady, tabId) {
+  console.log('[vibe-guide] 9. 다음 단계 요청 예약', { tabId });
+  const run = () => {
+    if (!tabId) {
+      console.log('[vibe-guide] 10. 다음 단계 요청 실행 (tabId 없음)');
+      onReady();
+      return;
+    }
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError || !tab) {
+        console.log('[vibe-guide] 10. 다음 단계 요청 실행 (탭 조회 실패)');
+        onReady();
+        return;
+      }
+      if (tab.status === 'complete') {
+        console.log('[vibe-guide] 10. 다음 단계 요청 실행 (탭 이미 complete)');
+        onReady();
+        return;
+      }
+      let cleaned = false;
+      let maxWaitTimer = null;
+      const listener = (id, changeInfo) => {
+        if (id !== tabId) return;
+        if (changeInfo.status === 'complete') {
+          console.log('[vibe-guide] 10. 다음 단계 요청 실행 (탭 complete 이벤트)');
+          cleanup();
+          onReady();
+        }
+      };
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        chrome.tabs.onUpdated.removeListener(listener);
+        if (maxWaitTimer != null) clearTimeout(maxWaitTimer);
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      maxWaitTimer = setTimeout(() => {
+        console.log('[vibe-guide] 10. 다음 단계 요청 실행 (최대 대기 만료)');
+        cleanup();
+        onReady();
+      }, NEXT_STEP_MAX_WAIT_MS);
+    });
+  };
+  setTimeout(run, NEXT_STEP_INITIAL_DELAY_MS);
 }
 
 /** URL이 플랜 단계 사이트(progress-site-links) 또는 그 하위 페이지인지 */
@@ -468,53 +525,43 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
           setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { error: res.error } }));
           chrome.storage.local.set({ pageGuidanceCache: next });
         } else if (res?.steps?.length) {
-          // 모든 단계가 완료된 상태에서 AI가 새로운 단계를 생성하지 못한 경우를 추적
-          // (현재는 단계가 생성되면 계속 진행)
-          // AI가 한 번에 하나의 단계만 반환하므로, 이전 단계에 새 단계 하나를 추가
-          const now = Date.now();
-          const newSteps = res.steps.map(step => ({
-            ...step,
-            createdAt: typeof step.createdAt === 'number' ? step.createdAt : now,
-          }));
+          // 응답 시점의 최신 완료 상태를 storage에서 다시 읽어 클릭 완료 반영이 UI에 덮어쓰이지 않도록 함
+          chrome.storage.local.get(['pageStepCompletions', 'pageGuidanceCache'], (r2) => {
+            const latestCompletions = r2.pageStepCompletions || {};
+            const latestCache = r2.pageGuidanceCache || {};
+            const stepsFromCache = latestCache[pageUrl]?.steps || existingSteps;
+            const completedFromStorage = latestCompletions[pageUrl] || existingCompleted;
 
-          let mergedSteps;
-          let mergedCompleted;
-          
-          if (existingSteps.length > 0) {
-            // 이전 단계가 있으면 새 단계 하나를 추가
-            const completed = existingCompleted || [];
-            const lastIncompleteIndex = completed.findIndex((done, idx) => !done && idx < existingSteps.length);
-            
-            if (lastIncompleteIndex >= 0) {
-              // 완료되지 않은 단계가 있으면 그 이후부터 새 단계로 교체 (하지만 AI는 하나만 반환하므로 추가)
-              // 이전 단계는 유지하고 새 단계 하나 추가
-              mergedSteps = [...existingSteps, ...newSteps];
-              mergedCompleted = [...existingCompleted];
+            const now = Date.now();
+            const newSteps = res.steps.map(step => ({
+              ...step,
+              createdAt: typeof step.createdAt === 'number' ? step.createdAt : now,
+            }));
+
+            let mergedSteps;
+            let mergedCompleted;
+            const baseSteps = stepsFromCache.length > 0 ? stepsFromCache : [];
+            const baseCompleted = Array.isArray(completedFromStorage) ? [...completedFromStorage] : [];
+
+            if (baseSteps.length > 0) {
+              mergedSteps = [...baseSteps, ...newSteps];
+              mergedCompleted = [...baseCompleted];
               while (mergedCompleted.length < mergedSteps.length) {
                 mergedCompleted.push(false);
               }
             } else {
-              // 모두 완료되었으면 새 단계 하나를 추가
-              mergedSteps = [...existingSteps, ...newSteps];
-              mergedCompleted = [...existingCompleted];
-              while (mergedCompleted.length < mergedSteps.length) {
-                mergedCompleted.push(false);
-              }
+              mergedSteps = newSteps;
+              mergedCompleted = new Array(mergedSteps.length).fill(false);
             }
-          } else {
-            // 이전 단계가 없으면 새 단계 하나만 사용
-            mergedSteps = newSteps;
-            mergedCompleted = new Array(mergedSteps.length).fill(false);
-          }
-          
-          const next = { ...cache, [pageUrl]: { steps: mergedSteps } };
-          setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { steps: mergedSteps } }));
-          chrome.storage.local.set({ pageGuidanceCache: next });
-          
-          // 완료 상태 저장
-          const nextCompletions = { ...completions, [pageUrl]: mergedCompleted };
-          chrome.storage.local.set({ pageStepCompletions: nextCompletions });
-          setPageStepCompletions(nextCompletions);
+
+            const nextCache = { ...latestCache, [pageUrl]: { steps: mergedSteps } };
+            const nextCompletions = { ...latestCompletions, [pageUrl]: mergedCompleted };
+
+            setGuidanceByUrl(prev => ({ ...prev, [pageUrl]: { steps: mergedSteps } }));
+            chrome.storage.local.set({ pageGuidanceCache: nextCache });
+            chrome.storage.local.set({ pageStepCompletions: nextCompletions });
+            setPageStepCompletions(nextCompletions);
+          });
         } else if (Array.isArray(res?.steps) && res.steps.length === 0) {
           // AI가 빈 배열을 반환한 경우 (더 이상 단계가 없음)
           // 완료 메시지를 steps에 추가 (기존 단계 유지)
@@ -580,6 +627,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     const backendDOMNodeId = step?.backendDOMNodeId ?? null;
     const hasBackendId = backendDOMNodeId != null && Number.isFinite(Number(backendDOMNodeId));
     if (!selector && !hasBackendId) return;
+    const stepKey = sourceUrl && sourceIndex != null ? `${sourceUrl}::${sourceIndex}` : null;
 
     if (sourceUrl && sourceIndex != null) {
       pendingAutoCompleteRef.current = {
@@ -587,40 +635,54 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         sourceIndex,
         timestamp: Date.now(),
       };
+      console.log('[vibe-guide] 1. handleSpotlight: pending 설정', { sourceUrl: sourceUrl?.slice(0, 50), sourceIndex });
     } else {
       pendingAutoCompleteRef.current = null;
+      console.log('[vibe-guide] 1. handleSpotlight: pending 미설정 (sourceUrl/sourceIndex 없음)');
     }
 
+    console.log('[vibe-guide] 2. handleSpotlight: SPOTLIGHT_ELEMENT 전송', { tabId: currentTab.tabId, hasSelector: !!selector, hasBackendId });
     chrome.runtime.sendMessage(
-      { type: 'SPOTLIGHT_ELEMENT', tabId: currentTab.tabId, selector, backendDOMNodeId },
+      { type: 'SPOTLIGHT_ELEMENT', tabId: currentTab.tabId, selector, backendDOMNodeId, explain: step?.explain ?? null, stepKey },
       () => {},
     );
   }, [currentTab?.tabId, pageUrl]);
 
-  // 콘텐츠 스크립트에서 스포트라이트 대상 요소 클릭 시 자동으로 해당 단계를 완료 처리
+  // 콘텐츠 스크립트에서 스포트라이트 대상 요소 클릭 시
+  // 1) 해당 단계를 자동으로 완료 처리하고
+  // 2) 기존 "다음 단계 받기"와 동일한 로직을 클릭 기반으로만 실행
   useEffect(() => {
     const handler = (msg) => {
       if (!msg || msg.type !== 'SPOTLIGHT_TARGET_CLICKED') return;
+      console.log('[vibe-guide] 3. SPOTLIGHT_TARGET_CLICKED 수신');
       const pending = pendingAutoCompleteRef.current;
-      if (!pending) return;
+      if (!pending) {
+        console.warn('[vibe-guide] 4. SPOTLIGHT_TARGET_CLICKED: pending 없음 → 완료 처리 스킵');
+        return;
+      }
 
       const { sourceUrl, sourceIndex } = pending;
-      // 클릭과 동시에 해당 단계를 완료 처리
+      console.log('[vibe-guide] 5. 단계 완료 처리 실행', { sourceUrl: sourceUrl?.slice(0, 50), sourceIndex });
       savePageStepCompletion(sourceUrl, sourceIndex, true);
-      // 한 번 처리 후에는 초기화
       if (pendingAutoCompleteRef.current === pending) {
         pendingAutoCompleteRef.current = null;
       }
+      console.log('[vibe-guide] 6. pending 초기화 완료');
+
+      // 요소 클릭으로 단계가 완료된 직후에만 "다음 단계 받기"를 예약 호출
+      console.log('[vibe-guide] 8c. SPOTLIGHT 클릭 완료 → 다음 단계 요청 예약');
+      scheduleNextStepAfterPageReady(handleRequestPageGuidance, currentTab?.tabId);
     };
     chrome.runtime.onMessage.addListener(handler);
     return () => chrome.runtime.onMessage.removeListener(handler);
-  }, [savePageStepCompletion]);
+  }, [savePageStepCompletion, handleRequestPageGuidance, currentTab?.tabId]);
 
-  /** 단계 제거 */
-  const removeStep = useCallback((sourceUrl, stepIndex) => {
-    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions'], (r) => {
+  /** 단계 제거 (완료 메시지 제거 시 도메인 완료 상태도 되돌림) */
+  const removeStep = useCallback((sourceUrl, stepIndex, isCompletionMessage = false) => {
+    chrome.storage.local.get(['pageGuidanceCache', 'pageStepCompletions', 'domainCompletions'], (r) => {
       const cache = r.pageGuidanceCache || {};
       const completions = r.pageStepCompletions || {};
+      const domains = r.domainCompletions || {};
       
       // 해당 URL의 단계 제거
       if (cache[sourceUrl]?.steps?.length) {
@@ -635,7 +697,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
         }
         
         // 완료 상태도 제거
-        const newCompletions = { ...completions };
+        let newCompletions = { ...completions };
         if (newCompletions[sourceUrl]) {
           const newCompleted = newCompletions[sourceUrl].filter((_, idx) => idx !== stepIndex);
           if (newCompleted.length === 0) {
@@ -644,20 +706,34 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             newCompletions[sourceUrl] = newCompleted;
           }
         }
-        
-        chrome.storage.local.set({ 
-          pageGuidanceCache: newCache,
-          pageStepCompletions: newCompletions 
-        }, () => {
-          setGuidanceByUrl(newCache);
-          setPageStepCompletions(newCompletions);
-        });
+        // 완료 메시지를 제거할 때는 해당 도메인의 완료 상태도 초기화
+        let newDomains = domains;
+        if (isCompletionMessage) {
+          const domain = getDomainFromUrl(sourceUrl);
+          if (domain) {
+            newDomains = { ...domains, [domain]: false };
+          }
+        }
+
+        chrome.storage.local.set(
+          { 
+            pageGuidanceCache: newCache,
+            pageStepCompletions: newCompletions,
+            domainCompletions: newDomains,
+          },
+          () => {
+            setGuidanceByUrl(newCache);
+            setPageStepCompletions(newCompletions);
+            setDomainCompletions(newDomains);
+          }
+        );
       }
     });
   }, []);
 
   /** UI 단계 완료 토글 저장 (같은 도메인 내에서 sourceUrl 기반으로 관리) */
   const savePageStepCompletion = useCallback((sourceUrl, stepIndex, done) => {
+    if (done) console.log('[vibe-guide] 7. savePageStepCompletion 호출', { sourceUrl: sourceUrl?.slice(0, 50), stepIndex });
     chrome.storage.local.get(['pageStepCompletions', 'pageGuidanceCache'], (r) => {
       const all = r.pageStepCompletions || {};
       const cache = r.pageGuidanceCache || {};
@@ -666,56 +742,13 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
       arr[stepIndex] = done;
       const next = { ...all, [sourceUrl]: arr };
       chrome.storage.local.set({ pageStepCompletions: next }, () => {
-        setPageStepCompletions(next);
+        if (done) console.log('[vibe-guide] 8. savePageStepCompletion 저장 완료');
+        // 함수형 업데이트로 최신 state에 반영해 UI가 확실히 갱신되도록 함
+        setPageStepCompletions((prev) => ({ ...prev, [sourceUrl]: arr }));
         
-        // 완료 버튼을 눌렀을 때 (done === true) 모든 단계가 완료되었는지 확인
-        if (done && pageUrl) {
-          // 같은 도메인의 모든 단계 확인
-          const currentDomain = getDomainFromUrl(pageUrl);
-          if (currentDomain) {
-            // 같은 도메인의 모든 단계 수집
-            const allSteps = [];
-            for (const [url, guidance] of Object.entries(cache)) {
-              if (guidance?.steps?.length && isSameSite(url, pageUrl)) {
-                const urlCompletions = url === sourceUrl ? next[url] : (all[url] || []);
-                guidance.steps.forEach((step, idx) => {
-                  allSteps.push({
-                    step,
-                    sourceUrl: url,
-                    sourceIndex: idx,
-                    completed: urlCompletions[idx] === true,
-                  });
-                });
-              }
-            }
-            
-            // 모든 단계가 완료되었는지 확인
-            const allCompleted = allSteps.length > 0 && allSteps.every(item => item.completed);
-            
-            if (allCompleted) {
-              // 모든 단계가 완료되었을 때만 자동으로 다음 단계 요청 (페이지 전환 대기 시간을 위해 짧게 딜레이)
-              setTimeout(() => {
-                handleRequestPageGuidance();
-              }, 1000);
-            }
-          } else {
-            // 도메인 추출 실패 시 현재 URL만 확인
-            const currentGuidance = cache[pageUrl];
-            if (currentGuidance?.steps?.length) {
-              const currentCompletions = pageUrl === sourceUrl ? next[pageUrl] : (all[pageUrl] || []);
-              const allCompleted = currentGuidance.steps.every((_, idx) => currentCompletions[idx] === true);
-              
-              if (allCompleted) {
-                setTimeout(() => {
-                  handleRequestPageGuidance();
-                }, 1000);
-              }
-            }
-          }
-        }
       });
     });
-  }, [handleRequestPageGuidance, pageUrl, isPlanSite]);
+  }, [pageUrl]);
 
   // AI가 새 단계를 생성해 제공했을 때(또는 다음 미완료 단계가 생겼을 때) 자동으로 "위치로 이동" 실행
   const lastAutoSpotlightRef = useRef({ key: null, index: null });
@@ -743,7 +776,12 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     const hasBackendId = step.backendDOMNodeId != null && Number.isFinite(Number(step.backendDOMNodeId));
     if (!hasSelector && !hasBackendId) return;
 
-    handleSpotlight(step);
+    // 자동 스포트라이트 시에도 클릭→완료 처리를 위해 sourceUrl/sourceIndex 전달
+    handleSpotlight({
+      ...step,
+      sourceUrl: nextIncomplete.sourceUrl,
+      sourceIndex: nextIncomplete.sourceIndex,
+    });
     lastAutoSpotlightRef.current = { key: domainKey, index: nextIncomplete.globalIndex };
   }, [
     currentTab?.tabId,
@@ -801,6 +839,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
   // 선택된 도메인이 있으면 해당 도메인의 guidance, 없으면 현재 페이지의 guidance
   const mergedGuidance = getMergedGuidanceForDomain(selectedDomainUrl);
   const pageGuidance = mergedGuidance || (pageUrl ? guidanceByUrl[pageUrl] : null);
+  const hasCompletionMessage = pageGuidance?.steps?.some((s) => s.isCompletionMessage === true);
   // 로딩 상태도 "현재 표시 중인 사이트(툴)" 기준으로 표시
   const displayUrlForGuidance = selectedDomainUrl || pageUrl;
   const loadingGuide = displayUrlForGuidance && loadingGuideUrl && isSameSite(loadingGuideUrl, displayUrlForGuidance);
@@ -862,7 +901,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                   className={cn('text-base transition-opacity', done && 'opacity-100')}
                   title={step.title}
                 >
-                  {done ? '✓' : icon}
+                  {done ? '✓' : <ToolIcon icon={icon} />}
                 </span>
               );
             })}
@@ -885,7 +924,9 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                     onClick={(e) => { e.preventDefault(); handleSwitchToDomain(url); }}
                   >
                     <span className="w-4 shrink-0 text-right text-muted-foreground">{idx + 1}.</span>
-                    <span>{icon}</span>
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden">
+                      <ToolIcon icon={icon} className="h-4 w-4 shrink-0 object-contain" />
+                    </span>
                     <span>{name}</span>
                   </a>
                   <Button
@@ -923,7 +964,7 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
             </div>
           )}
           {!loadingGuide && isPlanSite && (
-            <Button className="w-full" onClick={handleRequestPageGuidance}>
+            <Button className="w-full" onClick={handleRequestPageGuidance} disabled={hasCompletionMessage}>
               {pageGuidance?.steps?.length ? chrome.i18n.getMessage('guideNextStep') : chrome.i18n.getMessage('guideGetGuidance')}
             </Button>
           )}
@@ -970,6 +1011,17 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
                           </span>
                         )}
                         <span className="flex-1 text-xs leading-relaxed text-foreground">{step.text}</span>
+                        {isCompletionMessage && (
+                          <Button
+                            variant="ghost"
+                            size="iconSm"
+                            className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeStep(sourceUrl, sourceIndex, true)}
+                            title={chrome.i18n.getMessage('guideClose')}
+                          >
+                            ×
+                          </Button>
+                        )}
                       </div>
                       {!isCompletionMessage && (
                         <div className="mt-2 flex flex-wrap items-center gap-1.5">
