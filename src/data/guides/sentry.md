@@ -7,6 +7,13 @@ DSN URL
 - 구체적인 반환 형식
 { "steps": [] }
 
+1. Login
+2. Projects
+3. Create (or select) a Project
+4. Project Settings
+5. Client Keys (DSN)
+
+
 ## 복사해야 할 환경변수
 
-DSN URL → VITE_SENTRY_DSN
+DSN URL → VITE_SENTRY_DSN (google-ai-studio)

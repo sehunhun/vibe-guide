@@ -9,7 +9,15 @@ anon public key: https://supabase.com/dashboard/project/{project-id}/settings/ap
 { "steps": [] }
 
 
+## 조회 경로
+1. Login
+2. Dashboard
+3. Create(or select) a project → Project URL
+4. Project Settings
+5. API KEYS → anon public key
+
+
 ## 복사해야 할 환경변수
 
-Project URL → VITE_SUPABASE_URL
-anon public key → VITE_SUPABASE_ANON_KEY
+Project URL → VITE_SUPABASE_URL (google-ai-studio)
+anon public key → VITE_SUPABASE_ANON_KEY (google-ai-studio)

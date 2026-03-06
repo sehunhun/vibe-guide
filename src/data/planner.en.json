@@ -4,6 +4,10 @@
       "summary": "A backend service that handles database, login, and file storage in one place.",
       "whyNeeded": "For things like sign-up, login, saving posts and comments, or storing uploaded files—Supabase does it for you. You don't need to build a server."
     },
+    "paypal": {
+      "summary": "A widely used payment service to add card and wallet checkout to your site.",
+      "whyNeeded": "If you sell products or subscriptions, you need a way to accept payments. PayPal lets you add checkout with cards and PayPal accounts easily."
+    },
     "stripe": {
       "summary": "A payment service used to add card and easy payments to your website.",
       "whyNeeded": "Payments have strict security and legal rules. Using a dedicated service like Stripe is safe and makes it easy to add one-time or subscription payments."

@@ -7,6 +7,7 @@ export const SERVICE_FAVICONS = {
   'google-ai-studio': 'https://www.gstatic.com/aistudio/ai_studio_favicon_2_32x32.png',
   supabase: 'https://supabase.com/favicon/apple-icon-57x57.png',
   stripe: 'https://images.stripeassets.com/fzn2n1nzq965/1hgcBNd12BfT9VLgbId7By/01d91920114b124fb4cf6d448f9f06eb/favicon.svg',
+  paypal: 'https://www.paypalobjects.com/webstatic/icon/favicon.ico',
   vercel: 'https://assets.vercel.com/image/upload/q_auto/front/favicon/vercel/favicon.ico',
   railway: 'https://railway.app/favicon.ico',
   ga4: 'https://www.google.com/s2/favicons?domain=analytics.google.com&sz=128',
@@ -26,7 +27,7 @@ export const REQUIREMENT_TO_SERVICE = {
   db: { id: 'supabase', name: 'Supabase', icon: SERVICE_FAVICONS.supabase, url: 'https://supabase.com' },
   storage: { id: 'supabase', name: 'Supabase', icon: SERVICE_FAVICONS.supabase, url: 'https://supabase.com' },
   login: { id: 'supabase', name: 'Supabase', icon: SERVICE_FAVICONS.supabase, url: 'https://supabase.com' },
-  payment: { id: 'stripe', name: 'Stripe', icon: SERVICE_FAVICONS.stripe, url: 'https://stripe.com' },
+  payment: { id: 'paypal', name: 'PayPal', icon: SERVICE_FAVICONS.paypal, url: 'https://developer.paypal.com/dashboard/' },
   'frontend-hosting': { id: 'vercel', name: 'Vercel', icon: SERVICE_FAVICONS.vercel, url: 'https://vercel.com' },
   'backend-hosting': { id: 'railway', name: 'Railway', icon: SERVICE_FAVICONS.railway, url: 'https://railway.app' },
   analytics: { id: 'ga4', name: 'GA4', icon: SERVICE_FAVICONS.ga4, url: 'https://analytics.google.com' },
@@ -341,7 +342,7 @@ export function buildPlanFromSurveyTools(surveyResult) {
     });
   });
 
-  const toolStepDesc = getPlannerMessages().toolStepDesc;
+  const { toolStepDesc, toolStepDescByToolId } = getPlannerMessages();
   const steps = toolsWithOrder.map((tool, index) => ({
     stepId: tool.id,
     toolId: tool.id,
@@ -350,7 +351,7 @@ export function buildPlanFromSurveyTools(surveyResult) {
     order: index,
     status: 'pending',
     title: tool.name,
-    desc: substituteToolName(toolStepDesc, tool.name),
+    desc: substituteToolName((toolStepDescByToolId?.[tool.id] ?? toolStepDesc), tool.name),
     url: tool.url,
     type: 'tool',
   }));

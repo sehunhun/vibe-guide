@@ -7,6 +7,12 @@ API Key
 - 구체적인 반환 형식
 { "steps": [] }
 
+## 조회 경로
+1. Login
+2. API Keys tab
+3. Create (or select) an API key
+
+
 ## 복사해야 할 환경변수
 
-API Key → RESEND_API_KEY
+API Key → RESEND_API_KEY (google-ai-studio)

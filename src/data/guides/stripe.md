@@ -8,7 +8,13 @@ Secret key (sk_...)
 - 구체적인 반환 형식
 { "steps": [] }
 
+
+## 조회 경로
+
+
+
+
 ## 복사해야 할 환경변수
 
-Publishable key → VITE_STRIPE_PUBLISHABLE_KEY
-Secret key → STRIPE_SECRET_KEY
+Publishable key → VITE_STRIPE_PUBLISHABLE_KEY (google-ai-studio)
+Secret key → STRIPE_SECRET_KEY (google-ai-studio)

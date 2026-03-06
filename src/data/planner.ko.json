@@ -4,6 +4,10 @@
       "summary": "데이터베이스, 로그인, 파일 저장을 한 곳에서 처리하는 백엔드 서비스예요.",
       "whyNeeded": "회원가입·로그인, 게시글·댓글 저장, 업로드한 파일 보관처럼 \"서버에 뭔가 저장해야 하는\" 기능은 Supabase가 대신 해줘요. 직접 서버를 만들 필요가 없어요."
     },
+    "paypal": {
+      "summary": "카드·간편결제를 웹사이트에 붙일 때 널리 쓰이는 결제 서비스예요.",
+      "whyNeeded": "상품 판매나 구독 결제를 받으려면 결제 수단이 필요해요. PayPal을 쓰면 카드·페이 결제를 간단하게 붙일 수 있어요."
+    },
     "stripe": {
       "summary": "카드·간편결제를 웹사이트에 붙일 때 쓰는 결제 대행 서비스예요.",
       "whyNeeded": "결제는 보안·법 규정이 까다로워서, 전문 서비스(Stripe)를 쓰는 게 안전해요. 상품/정기구독 결제를 쉽게 넣을 수 있어요."
@@ -85,6 +89,9 @@
     }
   },
   "toolStepDesc": "$toolName$ 사이트에서 로그인 및 프로젝트 생성 후 시크릿을 조회하세요. 해당 시크릿을 Google AI Studio의 환경 변수에 추가하세요.",
+  "toolStepDescByToolId": {
+    "google-ai-studio": "Google AI Studio에서 앱을 빌드하고 다른 툴 사이트에서 시크릿을 가져오세요."
+  },
   "fallbackRole": "보조 도구",
   "fallbackDesc": "기능",
   "systemPrompt": {
