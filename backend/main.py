@@ -110,6 +110,13 @@ db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email
 - "무엇을 할 수 있게 되는지", "사용자/운영자 입장에서의 가치"로 표현할 것.
 - 예: db → "회원·데이터 저장", payment → "결제 받기", login → "로그인·회원가입", storage → "파일·이미지 저장", frontend-hosting → "웹사이트 배포·공개", analytics → "방문자·이용 현황 확인", email → "이메일 발송(가입 환영, 알림)", headless-cms → "콘텐츠(글·메뉴) 관리"
 
+# 반드시 지켜야 할 출력 규칙 (매우 중요)
+- tools 배열은 **정확히 10개**를 반환해.
+- 10개 항목끼리 **겹치면 안 돼**. (description이 사실상 같은 항목 반복 금지, requirements 조합이 같은 항목 반복 금지)
+- **배포/공개(=frontend-hosting)** 항목은 반드시 포함해. (웹사이트를 인터넷에 공개/배포한다는 뜻의 기능)
+- 사용자가 요청한 서비스의 **도메인 용어**를 description에 포함해. (사용자 답변에서 단어를 가져와 자연스럽게 섞어)
+- requirements는 가능한 한 **다양한 tool**을 쓰도록 구성해. (payment, db, login, storage, analytics, email, monitoring, headless-cms, backend-hosting, frontend-hosting를 최대한 폭넓게)
+
 # job
 사용자가 요청한 웹사이트 제작에 꼭 필요한 기능만 골라서 tools 배열로 반환해. 위 tools를 최대한 활용해서 누락 없이.
 각 항목: id(1부터 순번), description(한글, 비개발자가 이해하는 비즈니스·도메인 표현), requirements(위 도구 이름 중 필요한 것만 문자열 배열)."""
@@ -123,6 +130,13 @@ db, payment, login, storage, frontend-hosting, backend-hosting, analytics, email
 - Write description in **business and domain language** only. Do not use developer jargon (DB, API, hosting, frontend, backend, headless CMS, etc.).
 - Phrase each item as what the user can do or the value they get (outcome-oriented, user-facing).
 - Examples: db → "Store members and data", payment → "Accept payments", login → "Sign up and log in", storage → "Store files and images", frontend-hosting → "Publish your website", analytics → "See visitors and usage", email → "Send emails (welcome, notifications)", headless-cms → "Manage content (posts, menus)".
+
+# Output constraints (critical)
+- Return **exactly 10** items in the tools array.
+- No overlaps across the 10 items: avoid repeating essentially the same feature; do not repeat the same requirements combination.
+- Must include a **deployment/publishing** item (frontend-hosting).
+- Include the user's **domain terms** in descriptions by reusing words from their answer.
+- Use **as many different requirements/tools as possible** across the 10 items (payment, db, login, storage, analytics, email, monitoring, headless-cms, backend-hosting, frontend-hosting).
 
 # job
 Return only the features required for the user's requested website as a json with a "tools" array. Use the tools above so nothing is missed.
@@ -555,13 +569,25 @@ async def get_survey_tools(request: SurveyToolsRequest):
         user_content = (
             f"사용자 답변: {user_answer}\n\n"
             "위 답변을 바탕으로 해당 웹사이트 제작에 꼭 필요한 기능만 골라서 tools 배열을 반환해. "
-            "각 항목의 description은 반드시 비개발자가 이해하기 쉬운 비즈니스·도메인 용어로만 써줘(개발 용어 사용 금지)."
+            "각 항목의 description은 반드시 비개발자가 이해하기 쉬운 비즈니스·도메인 용어로만 써줘(개발 용어 사용 금지).\n\n"
+            "추가 제약:\n"
+            "- tools 배열은 정확히 10개\n"
+            "- 10개끼리 겹치면 안 됨(같은 기능/같은 requirements 조합 반복 금지)\n"
+            "- 배포/공개(frontend-hosting)는 반드시 포함\n"
+            "- 사용자 답변에서 도메인 단어를 description에 꼭 섞어쓰기\n"
+            "- requirements는 가능한 한 다양한 tool을 사용"
         )
     else:
         user_content = (
             f"User answer: {user_answer}\n\n"
             "From this answer, return a tools array with only the features needed to build that website. "
-            "Write each description in business/domain language that non-developers understand (no developer jargon)."
+            "Write each description in business/domain language that non-developers understand (no developer jargon).\n\n"
+            "Extra constraints:\n"
+            "- tools array must be exactly 10 items\n"
+            "- no overlaps across items (no duplicate features; no duplicate requirements combinations)\n"
+            "- must include deployment/publishing (frontend-hosting)\n"
+            "- include domain terms from the user's answer in descriptions\n"
+            "- use as many different tools/requirements as possible"
         )
 
     async with httpx.AsyncClient(timeout=60.0) as client:

@@ -18,6 +18,93 @@ import { cn } from '../lib/utils.js';
 
 if (typeof getUILocale === 'function') setPlannerLocale(getUILocale());
 
+const TOOL_REVEAL_COUNTS = [5, 7, 9, 10];
+
+function normalizeReqs(reqs) {
+  return Array.isArray(reqs) ? reqs.filter(Boolean).map(String) : [];
+}
+
+function toolKey(t) {
+  const desc = String(t?.description || '').trim().toLowerCase();
+  const req = normalizeReqs(t?.requirements).slice().sort().join(',');
+  return `${desc}::${req}`;
+}
+
+function buildSurveyTools10(tools, locale) {
+  const isKo = (locale || 'en').toLowerCase().startsWith('ko');
+  const templates = isKo
+    ? [
+        { description: '로그인·회원가입 받기', requirements: ['login', 'db'] },
+        { description: '사진·파일 업로드/관리', requirements: ['storage'] },
+        { description: '결제 받기', requirements: ['payment'] },
+        { description: '이메일 보내기(알림·공지)', requirements: ['email'] },
+        { description: '방문자·이용 현황 보기', requirements: ['analytics'] },
+        { description: '문제/오류를 빠르게 감지하기', requirements: ['monitoring'] },
+        { description: '글·메뉴 같은 콘텐츠를 쉽게 수정하기', requirements: ['headless-cms'] },
+        { description: '웹사이트를 인터넷에 공개하기', requirements: ['frontend-hosting'] },
+        { description: '서비스를 안정적으로 운영하기', requirements: ['backend-hosting'] },
+      ]
+    : [
+        { description: 'Let users sign up and log in', requirements: ['login', 'db'] },
+        { description: 'Upload and manage photos/files', requirements: ['storage'] },
+        { description: 'Accept payments', requirements: ['payment'] },
+        { description: 'Send emails (notifications, updates)', requirements: ['email'] },
+        { description: 'See visitors and usage', requirements: ['analytics'] },
+        { description: 'Detect issues and errors quickly', requirements: ['monitoring'] },
+        { description: 'Edit content (posts, menus) easily', requirements: ['headless-cms'] },
+        { description: 'Publish your website online', requirements: ['frontend-hosting'] },
+        { description: 'Keep your service running reliably', requirements: ['backend-hosting'] },
+      ];
+
+  const base = Array.isArray(tools) ? tools : [];
+  const out = [];
+  const seen = new Set();
+  const seenReqSigs = new Set();
+
+  for (const t of base) {
+    if (out.length >= 10) break;
+    const item = {
+      id: Number.isFinite(Number(t?.id)) ? Number(t.id) : null,
+      description: String(t?.description || '').trim(),
+      requirements: normalizeReqs(t?.requirements),
+    };
+    if (!item.description) continue;
+    const reqSig = item.requirements.slice().sort().join(',');
+    const key = toolKey(item);
+    if (seen.has(key)) continue;
+    out.push(item);
+    seen.add(key);
+    if (reqSig) seenReqSigs.add(reqSig);
+  }
+
+  let maxId = out.reduce((m, t) => (Number.isFinite(Number(t.id)) ? Math.max(m, Number(t.id)) : m), 0);
+  for (const tmpl of templates) {
+    if (out.length >= 10) break;
+    const reqSig = normalizeReqs(tmpl.requirements).slice().sort().join(',');
+    if (reqSig && seenReqSigs.has(reqSig)) continue;
+    const item = { id: ++maxId, description: tmpl.description, requirements: tmpl.requirements };
+    const key = toolKey(item);
+    if (seen.has(key)) continue;
+    out.push(item);
+    seen.add(key);
+    if (reqSig) seenReqSigs.add(reqSig);
+  }
+
+  // 혹시 모자라면(극단 케이스) 단순 폴백을 채워 10개 보장
+  const fallbackReqCycle = ['login', 'storage', 'payment', 'email', 'analytics', 'monitoring', 'headless-cms', 'frontend-hosting', 'backend-hosting', 'db'];
+  while (out.length < 10) {
+    maxId += 1;
+    const idx = out.length;
+    out.push({
+      id: maxId,
+      description: isKo ? `추가 기능 ${idx + 1}` : `Extra feature ${idx + 1}`,
+      requirements: [fallbackReqCycle[idx % fallbackReqCycle.length]],
+    });
+  }
+
+  return out.slice(0, 10);
+}
+
 export default function SurveyApp() {
   const [step, setStep] = useState(0);
   const [siteGoal, setSiteGoal] = useState('');
@@ -28,6 +115,7 @@ export default function SurveyApp() {
   const [error, setError] = useState(null);
   const [expandedServiceId, setExpandedServiceId] = useState(null);
   const [showCopiedNotice, setShowCopiedNotice] = useState(false);
+  const [toolRevealStage, setToolRevealStage] = useState(0);
 
   useEffect(() => {
     setPlannerLocale(getUILocale());
@@ -71,6 +159,7 @@ export default function SurveyApp() {
       }
       setAiTools(tools);
       setSelectedToolIds(new Set());
+      setToolRevealStage(0);
       setStep(1);
     } catch (e) {
       setError(e.message || chrome.i18n.getMessage('surveyErrorLoad'));
@@ -93,7 +182,7 @@ export default function SurveyApp() {
   }
 
   async function handleGuideStart() {
-    const selected = aiTools.filter(t => selectedToolIds.has(t.id));
+    const selected = surveyTools.filter(t => selectedToolIds.has(t.id));
     const payload = buildSurveyPayload({
       siteGoal: siteGoal.trim(),
       selectedTools: selected,
@@ -135,10 +224,14 @@ export default function SurveyApp() {
     }
   }
 
-  const selectedTools = step === 2 ? aiTools.filter(t => selectedToolIds.has(t.id)) : [];
+  const locale = getUILocale();
+  const surveyTools = buildSurveyTools10(aiTools, locale);
+  const selectedTools = step === 2 ? surveyTools.filter(t => selectedToolIds.has(t.id)) : [];
   const uniqueServices = step === 2 ? getUniqueServicesFromSelectedTools(selectedTools) : [];
   const requirementObjects = step === 2 ? buildRequirementObjects(selectedTools) : [];
   const progressPct = ((step + 1) / 3) * 100;
+  const toolVisibleCount = TOOL_REVEAL_COUNTS[Math.min(toolRevealStage, TOOL_REVEAL_COUNTS.length - 1)];
+  const visibleSurveyTools = step === 1 ? surveyTools.slice(0, Math.min(toolVisibleCount, surveyTools.length)) : [];
 
   return (
     <div className="survey-page">
@@ -201,7 +294,7 @@ export default function SurveyApp() {
               </p>
             </div>
             <div className="flex flex-col gap-3">
-              {aiTools.map(tool => {
+              {visibleSurveyTools.map(tool => {
                 const sel = selectedToolIds.has(tool.id);
                 return (
                   <button
@@ -219,6 +312,20 @@ export default function SurveyApp() {
                 );
               })}
             </div>
+            {surveyTools.length > toolVisibleCount && toolRevealStage < TOOL_REVEAL_COUNTS.length - 1 && (
+              <div className="mt-4 flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => setToolRevealStage(s => Math.min(s + 1, TOOL_REVEAL_COUNTS.length - 1))}
+                  aria-label={locale.toLowerCase().startsWith('ko') ? '기능 더 보기' : 'Show more features'}
+                >
+                  <span aria-hidden>+</span>
+                  {locale.toLowerCase().startsWith('ko') ? '더 보기' : 'Show more'}
+                </Button>
+              </div>
+            )}
           </>
         )}
 
