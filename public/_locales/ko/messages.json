@@ -55,7 +55,7 @@
   "guideGetGuidance": { "message": "AI 안내 받기" },
   "guideAnalyzing": { "message": "페이지를 분석하고 있어요..." },
   "guideRetry": { "message": "다시 시도" },
-  "guideSpotlight": { "message": "위치로 이동" },
+  "guideSpotlight": { "message": "설명 보기" },
   "guideCopyPrompt": { "message": "설문에서 만든 프롬프트를 클립보드에 복사" },
   "guideCopied": { "message": "복사 되었습니다" },
   "guideDone": { "message": "완료" },
@@ -69,7 +69,7 @@
   "guideCompletionMessage": { "message": "이 페이지에서 할 일이 완료 되었습니다!" },
   "guideGoToNextPage": { "message": "다음 페이지로 넘어가기" },
 
-  "stepExplainTitle": { "message": "이 단계가 중요한 이유" },
+  "stepExplainTitle": { "message": "이 버튼이 하는 일은 무엇인가요?" },
   "stepExplainAsk": { "message": "이 단계 더 물어보기" },
   "stepExplainPlaceholder": { "message": "이 단계에서 추가로 궁금한 점을 적어주세요." },
   "stepExplainSend": { "message": "질문 보내기" },

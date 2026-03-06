@@ -28,9 +28,15 @@ let _spotlightExplainState = null; // { stepKey, explain }
 const _stepExplainHistoryByKey = {};
 let _spotlightExplainLoading = false;
 
+const POPUP_ROOT_ID = 'vibe-guide-popup-root';
+
 function removeExplainPopup() {
   if (_spotlightExplainPopup && _spotlightExplainPopup.parentNode) {
-    _spotlightExplainPopup.parentNode.removeChild(_spotlightExplainPopup);
+    const parent = _spotlightExplainPopup.parentNode;
+    parent.removeChild(_spotlightExplainPopup);
+    if (parent.id === POPUP_ROOT_ID && parent.parentNode) {
+      parent.parentNode.removeChild(parent);
+    }
   }
   _spotlightExplainPopup = null;
   _spotlightExplainState = null;
@@ -92,7 +98,9 @@ function removeSpotlight() {
     _spotlightCleanup();
     _spotlightCleanup = null;
   }
-   // 단계 설명 팝업도 함께 제거
+  document.getElementById('vibe-guide-spotlight-dim-overlay')?.remove();
+  document.getElementById('vibe-guide-spotlight-click-catcher')?.remove();
+  // 단계 설명 팝업도 함께 제거
   removeExplainPopup();
   let removed = false;
   while (unwrapSpotlight()) removed = true;
@@ -184,25 +192,26 @@ function wrapElementBySelector(selector) {
   wrapper.appendChild(el);
 
   const clickHandler = (event) => {
-    let wasTargetClick = false;
+    let elementToClick = null;
     try {
       const target = event?.target;
       if (wrapper && target) {
         const byContains = wrapper.contains(target);
         const byPath = event.composedPath && event.composedPath().includes(wrapper);
         const byRect = isClickInsideElement(event, wrapper);
-        wasTargetClick = byContains || byPath || byRect;
-        console.log('[vibe-guide] content: wrap 클릭', { tag: target?.tagName, byContains, byPath, byRect, wasTargetClick });
-      }
-      if (wasTargetClick) {
-        console.log('[vibe-guide] content: SPOTLIGHT_TARGET_CLICKED 전송');
-        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
+        if (byContains || byPath || byRect) {
+          chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
+          elementToClick = el;
+        }
       }
     } catch (e) {
       console.warn('[vibe-guide] content: wrap 클릭 처리 예외', e);
     }
     document.removeEventListener('click', clickHandler, true);
-    removeSpotlight();
+    setTimeout(() => {
+      removeSpotlight();
+      if (elementToClick?.isConnected) elementToClick.click();
+    }, 0);
   };
   document.addEventListener('click', clickHandler, true);
   return { ok: true };
@@ -245,6 +254,16 @@ function createExplainPopup(explain, stepKey) {
 
   removeExplainPopup();
 
+  const popupRoot = document.createElement('div');
+  popupRoot.id = POPUP_ROOT_ID;
+  popupRoot.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    pointer-events: none;
+    isolation: isolate;
+  `;
+
   const popup = document.createElement('div');
   popup.id = 'vibe-guide-spotlight-popup';
   popup.style.cssText = `
@@ -258,39 +277,62 @@ function createExplainPopup(explain, stepKey) {
     border-radius: 10px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.35);
     padding: 8px 10px 10px;
-    z-index: 2147483647;
     pointer-events: auto;
   `;
 
   const title = document.createElement('div');
   title.style.cssText = 'font-weight: 600; font-size: 11px; margin-bottom: 4px; color:#4b5563;';
-  title.textContent = chrome.i18n?.getMessage('stepExplainTitle') || '이 단계가 중요한 이유';
+  title.textContent = chrome.i18n?.getMessage('stepExplainTitle') || '이 버튼이 하는 일은 무엇인가요?';
 
   const textEl = document.createElement('div');
   textEl.style.cssText = 'font-size: 11px; color:#111827; white-space: pre-wrap;';
   textEl.textContent = explain;
 
   const actions = document.createElement('div');
-  actions.style.cssText = 'margin-top: 6px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;';
+  actions.style.cssText =
+    'margin-top: 6px; display:flex; align-items:center; justify-content:flex-end; gap:6px; flex-wrap:wrap;';
 
   const askButton = document.createElement('button');
   askButton.type = 'button';
-  askButton.textContent = chrome.i18n?.getMessage('stepExplainAsk') || '이 단계 더 물어보기';
+  askButton.textContent = '💬';
+  askButton.setAttribute(
+    'aria-label',
+    chrome.i18n?.getMessage('stepExplainAsk') || '이 단계 더 물어보기',
+  );
   askButton.style.cssText = `
+    width: 22px;
+    height: 22px;
     border-radius: 999px;
     border: 1px solid #e5e7eb;
-    padding: 4px 8px;
-    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
     background: #f9fafb;
-    color: #111827;
+    color: #4f46e5;
     cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   `;
 
+  askButton.addEventListener('mouseenter', () => {
+    askButton.style.backgroundColor = '#eef2ff';
+    askButton.style.borderColor = '#c7d2fe';
+    askButton.style.boxShadow = '0 1px 2px rgba(15,23,42,0.18)';
+  });
+  askButton.addEventListener('mouseleave', () => {
+    askButton.style.backgroundColor = '#f9fafb';
+    askButton.style.borderColor = '#e5e7eb';
+    askButton.style.boxShadow = 'none';
+  });
+
   const statusEl = document.createElement('div');
-  statusEl.style.cssText = 'flex:1 1 auto; min-width:0; font-size:10px; color:#6b7280;';
+  statusEl.style.cssText = 'margin-top:4px; font-size:10px; color:#6b7280;';
 
   const qaContainer = document.createElement('div');
-  qaContainer.style.cssText = 'margin-top:6px; display:none; flex-direction:column; gap:4px;';
+  qaContainer.style.cssText = 'margin-top:6px; display:none; flex-direction:column; gap:2px;';
+
+  const inputWrap = document.createElement('div');
+  inputWrap.style.cssText = 'position:relative; display:flex; align-items:flex-end;';
 
   const textarea = document.createElement('textarea');
   textarea.rows = 2;
@@ -299,32 +341,92 @@ function createExplainPopup(explain, stepKey) {
   textarea.style.cssText = `
     width: 100%;
     resize: none;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid #e5e7eb;
-    padding: 4px 6px;
+    padding: 6px 26px 6px 8px;
     font-size: 11px;
     box-sizing: border-box;
+    line-height: 1.4;
+    min-height: 24px;
+    max-height: 96px;
+    overflow-y: auto;
   `;
-
-  const sendRow = document.createElement('div');
-  sendRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:6px;';
+  inputWrap.appendChild(textarea);
 
   const sendButton = document.createElement('button');
   sendButton.type = 'button';
-  sendButton.textContent =
-    chrome.i18n?.getMessage('stepExplainSend') || (chrome.i18n?.getMessage('chatSend') || '보내기');
+  sendButton.textContent = '➤';
+  sendButton.setAttribute(
+    'aria-label',
+    chrome.i18n?.getMessage('stepExplainSend') || (chrome.i18n?.getMessage('chatSend') || '보내기'),
+  );
   sendButton.style.cssText = `
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 18px;
+    height: 18px;
     border-radius: 999px;
     border: none;
-    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 11px;
     background: #4f46e5;
     color: #ffffff;
     cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.18);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
   `;
+  inputWrap.appendChild(sendButton);
+
+  sendButton.addEventListener('mouseenter', () => {
+    sendButton.style.backgroundColor = '#4338ca';
+    sendButton.style.boxShadow = '0 2px 6px rgba(15,23,42,0.22)';
+  });
+  sendButton.addEventListener('mouseleave', () => {
+    sendButton.style.backgroundColor = '#4f46e5';
+    sendButton.style.boxShadow = '0 1px 2px rgba(15,23,42,0.18)';
+    sendButton.style.transform = 'translateY(0)';
+  });
+  sendButton.addEventListener('mousedown', () => {
+    sendButton.style.transform = 'translateY(1px)';
+  });
+  sendButton.addEventListener('mouseup', () => {
+    sendButton.style.transform = 'translateY(0)';
+  });
 
   const historyContainer = document.createElement('div');
   historyContainer.style.cssText = 'margin-top:6px; max-height:140px; overflow-y:auto;';
+
+  /** 채팅 탭과 동일: 줄바꿈 + **...** 볼드. DOM 노드만 사용해 XSS 방지. */
+  function formatMessageText(text) {
+    const fragment = document.createDocumentFragment();
+    const safe = String(text ?? '')
+      .replace(/\r\n/g, '\n')
+      .replace(/<br\s*\/?>/gi, '\n');
+    const lines = safe.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) fragment.appendChild(document.createElement('br'));
+      const line = lines[i];
+      const re = /\*\*(.+?)\*\*/g;
+      let lastEnd = 0;
+      let match;
+      while ((match = re.exec(line)) !== null) {
+        if (match.index > lastEnd) {
+          fragment.appendChild(document.createTextNode(line.slice(lastEnd, match.index)));
+        }
+        const strong = document.createElement('strong');
+        strong.textContent = match[1];
+        fragment.appendChild(strong);
+        lastEnd = re.lastIndex;
+      }
+      if (lastEnd < line.length) {
+        fragment.appendChild(document.createTextNode(line.slice(lastEnd)));
+      }
+    }
+    return fragment;
+  }
 
   function renderHistory() {
     historyContainer.innerHTML = '';
@@ -333,15 +435,16 @@ function createExplainPopup(explain, stepKey) {
     history.forEach((m) => {
       const row = document.createElement('div');
       row.style.cssText =
-        'font-size:10px; margin-bottom:3px; padding:3px 4px; border-radius:4px; background:#f9fafb;';
-      const who = m.role === 'assistant' ? '가이드' : '나';
-      const whoSpan = document.createElement('span');
-      whoSpan.style.cssText = 'font-weight:600; margin-right:4px; color:#4b5563;';
-      whoSpan.textContent = `${who}:`;
-      const textSpan = document.createElement('span');
-      textSpan.textContent = m.text || '';
-      row.appendChild(whoSpan);
-      row.appendChild(textSpan);
+        'font-size:10px; margin-bottom:6px; padding:4px 6px; border-radius:6px; background:#f9fafb; display:flex; align-items:flex-start; gap:6px;';
+      const icon = document.createElement('span');
+      icon.style.cssText = 'font-size:14px; line-height:1; flex-shrink:0;';
+      icon.textContent = m.role === 'assistant' ? '🤖' : '👤';
+      icon.setAttribute('aria-hidden', 'true');
+      const body = document.createElement('div');
+      body.style.cssText = 'flex:1; min-width:0; word-break:break-word; line-height:1.4;';
+      body.appendChild(formatMessageText(m.text || ''));
+      row.appendChild(icon);
+      row.appendChild(body);
       historyContainer.appendChild(row);
     });
   }
@@ -365,6 +468,7 @@ function createExplainPopup(explain, stepKey) {
         type: 'GET_PAGE_CHAT_ANSWER',
         history,
         userMessage: question,
+        explainFollowUp: true,
       },
       (res) => {
         _spotlightExplainLoading = false;
@@ -414,16 +518,24 @@ function createExplainPopup(explain, stepKey) {
   });
 
   textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
       e.preventDefault();
       sendQuestion();
     }
   });
 
-  qaContainer.appendChild(textarea);
-  sendRow.appendChild(sendButton);
-  sendRow.appendChild(statusEl);
-  qaContainer.appendChild(sendRow);
+  function autoResizeTextarea() {
+    textarea.style.height = 'auto';
+    const maxHeight = 96;
+    const newHeight = Math.min(maxHeight, textarea.scrollHeight || 0);
+    if (newHeight) textarea.style.height = `${newHeight}px`;
+  }
+  textarea.addEventListener('input', autoResizeTextarea);
+  autoResizeTextarea();
+
+  qaContainer.appendChild(inputWrap);
+  qaContainer.appendChild(statusEl);
+  qaContainer.appendChild(historyContainer);
 
   actions.appendChild(askButton);
 
@@ -431,13 +543,13 @@ function createExplainPopup(explain, stepKey) {
   popup.appendChild(textEl);
   popup.appendChild(actions);
   popup.appendChild(qaContainer);
-  popup.appendChild(historyContainer);
 
   _spotlightExplainPopup = popup;
   _spotlightExplainState = { stepKey: stepKey || 'default', explain };
 
   renderHistory();
-  document.body.appendChild(popup);
+  popupRoot.appendChild(popup);
+  document.body.appendChild(popupRoot);
 
   return popup;
 }
@@ -476,6 +588,31 @@ function spotlightBySelector(selector, explain, stepKey) {
   `;
   document.body.appendChild(overlay);
 
+  const clickHandler = (event) => {
+    let elementToClick = null;
+    try {
+      const target = event?.target;
+      if (_spotlightExplainPopup && target && (_spotlightExplainPopup.contains(target) || (event.composedPath && event.composedPath().includes(_spotlightExplainPopup)))) return;
+      if (el && target) {
+        const byContains = el.contains(target);
+        const byPath = event.composedPath && event.composedPath().includes(el);
+        const byRect = isClickInsideElement(event, el);
+        if (byContains || byPath || byRect) {
+          chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
+          elementToClick = el;
+        }
+      }
+    } catch (e) {
+      console.warn('[vibe-guide] content: overlay 클릭 처리 예외', e);
+    }
+    document.removeEventListener('click', clickHandler, true);
+    setTimeout(() => {
+      removeSpotlight();
+      if (elementToClick?.isConnected) elementToClick.click();
+    }, 0);
+  };
+  document.addEventListener('click', clickHandler, true);
+
   window.addEventListener('scroll', updateOverlay, true);
   window.addEventListener('resize', updateOverlay);
   _spotlightCleanup = () => {
@@ -485,37 +622,6 @@ function spotlightBySelector(selector, explain, stepKey) {
     _spotlightCleanup = null;
   };
 
-  const clickHandler = (event) => {
-    let wasTargetClick = false;
-    try {
-      const target = event?.target;
-      // 설명 팝업 내부 클릭은 스포트라이트 유지
-      if (_spotlightExplainPopup && target) {
-        const byContainsPopup = _spotlightExplainPopup.contains(target);
-        const byPathPopup = event.composedPath && event.composedPath().includes(_spotlightExplainPopup);
-        if (byContainsPopup || byPathPopup) {
-          console.log('[vibe-guide] content: overlay 클릭 (설명 팝업 내부, 무시)');
-          return;
-        }
-      }
-      if (el && target) {
-        const byContains = el.contains(target);
-        const byPath = event.composedPath && event.composedPath().includes(el);
-        const byRect = isClickInsideElement(event, el);
-        wasTargetClick = byContains || byPath || byRect;
-        console.log('[vibe-guide] content: overlay 클릭', { tag: target?.tagName, byContains, byPath, byRect, wasTargetClick });
-      }
-      if (wasTargetClick) {
-        console.log('[vibe-guide] content: SPOTLIGHT_TARGET_CLICKED 전송 (overlay)');
-        chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
-      }
-    } catch (e) {
-      console.warn('[vibe-guide] content: overlay 클릭 처리 예외', e);
-    }
-    document.removeEventListener('click', clickHandler, true);
-    removeSpotlight();
-  };
-  document.addEventListener('click', clickHandler, true);
   return { ok: true };
 }
 
@@ -559,7 +665,7 @@ function spotlightByRect(rect) {
 
   const clickHandler = () => {
     document.removeEventListener('click', clickHandler, true);
-    removeSpotlight();
+    setTimeout(() => removeSpotlight(), 0);
   };
   document.addEventListener('click', clickHandler, true);
   return { ok: true };
@@ -592,11 +698,68 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       clearTimeout(_spotlightTimeoutId);
       _spotlightTimeoutId = null;
     }
+    const wrapper = document.getElementById('vibe-guide-spotlight-wrapper');
+    if (wrapper) {
+      wrapper.style.boxShadow = 'none';
+      const dimOverlay = document.createElement('div');
+      dimOverlay.id = 'vibe-guide-spotlight-dim-overlay';
+      dimOverlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483645;';
+      const hole = document.createElement('div');
+      hole.style.boxShadow = '0 0 0 9999px rgba(0,0,0,0.35)';
+      const updateDimOverlay = () => {
+        const w = document.getElementById('vibe-guide-spotlight-wrapper');
+        if (!w) return;
+        const r = w.getBoundingClientRect();
+        hole.style.position = 'absolute';
+        hole.style.left = r.left + 'px';
+        hole.style.top = r.top + 'px';
+        hole.style.width = r.width + 'px';
+        hole.style.height = r.height + 'px';
+      };
+      updateDimOverlay();
+      dimOverlay.appendChild(hole);
+      document.body.appendChild(dimOverlay);
+      window.addEventListener('scroll', updateDimOverlay, true);
+      window.addEventListener('resize', updateDimOverlay);
+      const prevCleanup = _spotlightCleanup;
+      _spotlightCleanup = () => {
+        window.removeEventListener('scroll', updateDimOverlay, true);
+        window.removeEventListener('resize', updateDimOverlay);
+        dimOverlay.remove();
+        _spotlightCleanup = prevCleanup || null;
+      };
+    }
+    const clickHandler = (event) => {
+      let elementToClick = null;
+      try {
+        const wrapperEl = document.getElementById('vibe-guide-spotlight-wrapper');
+        const target = event?.target;
+        if (_spotlightExplainPopup && target && (_spotlightExplainPopup.contains(target) || (event.composedPath && event.composedPath().includes(_spotlightExplainPopup)))) return;
+        if (wrapperEl && target) {
+          const byContains = wrapperEl.contains(target);
+          const byPath = event.composedPath && event.composedPath().includes(wrapperEl);
+          const byRect = isClickInsideElement(event, wrapperEl);
+          if (byContains || byPath || byRect) {
+            chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
+            elementToClick = wrapperEl.firstElementChild;
+          }
+        }
+      } catch (e) {
+        console.warn('[vibe-guide] content: SPOTLIGHT_WRAP_DONE 클릭 예외', e);
+      }
+      document.removeEventListener('click', clickHandler, true);
+      setTimeout(() => {
+        removeSpotlight();
+        if (elementToClick?.isConnected) elementToClick.click();
+      }, 0);
+    };
+    document.addEventListener('click', clickHandler, true);
+
     // backendDOMNodeId 기반 CDP wrap의 경우에도, 스포트라이트가 꺼진 뒤
     // 같은 요소 클릭을 감지할 수 있도록 data-attribute 기반 selector를 캐시
     try {
-      const wrapper = document.getElementById('vibe-guide-spotlight-wrapper');
-      const targetEl = wrapper?.firstElementChild;
+      const wrapperForCache = document.getElementById('vibe-guide-spotlight-wrapper');
+      const targetEl = wrapperForCache?.firstElementChild;
       const backendId = msg.backendDOMNodeId;
       if (targetEl && backendId != null) {
         const idStr = String(backendId);
@@ -611,38 +774,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } catch (e) {
       console.warn('[vibe-guide] content: SPOTLIGHT_WRAP_DONE target 캐시 실패', e);
     }
-    const clickHandler = (event) => {
-      let wasTargetClick = false;
-      try {
-        const wrapper = document.getElementById('vibe-guide-spotlight-wrapper');
-        const target = event?.target;
-        // 설명 팝업 내부 클릭은 스포트라이트 유지
-        if (_spotlightExplainPopup && target) {
-          const byContainsPopup = _spotlightExplainPopup.contains(target);
-          const byPathPopup = event.composedPath && event.composedPath().includes(_spotlightExplainPopup);
-          if (byContainsPopup || byPathPopup) {
-            console.log('[vibe-guide] content: SPOTLIGHT_WRAP_DONE 클릭 (설명 팝업 내부, 무시)');
-            return;
-          }
-        }
-        if (wrapper && target) {
-          const byContains = wrapper.contains(target);
-          const byPath = event.composedPath && event.composedPath().includes(wrapper);
-          const byRect = isClickInsideElement(event, wrapper);
-          wasTargetClick = byContains || byPath || byRect;
-          console.log('[vibe-guide] content: SPOTLIGHT_WRAP_DONE 클릭', { tag: target?.tagName, byContains, byPath, byRect, wasTargetClick });
-        }
-        if (wasTargetClick) {
-          console.log('[vibe-guide] content: SPOTLIGHT_TARGET_CLICKED 전송 (CDP wrap)');
-          chrome.runtime.sendMessage({ type: 'SPOTLIGHT_TARGET_CLICKED' }).catch(() => {});
-        }
-      } catch (e) {
-        console.warn('[vibe-guide] content: SPOTLIGHT_WRAP_DONE 클릭 예외', e);
-      }
-      document.removeEventListener('click', clickHandler, true);
-      removeSpotlight();
-    };
-    document.addEventListener('click', clickHandler, true);
     sendResponse({ ok: true });
     return true;
   }

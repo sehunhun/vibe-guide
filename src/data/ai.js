@@ -5,7 +5,7 @@
 
 import { QUESTIONS } from './tools.js';
 import { getDomainGuide, getDomainIdFromUrl, getDemoGuide } from './guides.js';
-import { PLAN_MODE } from './planner.js';
+import { PLAN_MODE, getPlannerMessages } from './planner.js';
 
 const MAX_HTML_LEN = 30000; // 토큰 절감용
 
@@ -67,6 +67,38 @@ function formatPlan(plan) {
   ].filter(Boolean).join('\n');
 }
 
+/**
+ * pageUrl이 속한 플랜 단계 인덱스와 직전 단계 toolId 반환.
+ * @param {object} plan - plan.steps, plan.tools 있음
+ * @param {string} pageUrl - 현재 페이지 URL
+ * @returns {{ currentStepIndex: number, currentToolId: string, previousToolId: string|null } | null}
+ */
+function getCurrentPlanStepContext(plan, pageUrl) {
+  if (!plan?.steps?.length || !pageUrl) return null;
+  let currentHost;
+  try {
+    currentHost = new URL(pageUrl).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  for (let i = 0; i < plan.steps.length; i++) {
+    const step = plan.steps[i];
+    const stepUrl = step.url || plan.tools?.find((t) => t.id === step.toolId)?.url;
+    if (!stepUrl) continue;
+    try {
+      const stepHost = new URL(stepUrl).hostname.toLowerCase();
+      if (currentHost === stepHost || currentHost.endsWith('.' + stepHost)) {
+        return {
+          currentStepIndex: i,
+          currentToolId: step.toolId,
+          previousToolId: i >= 1 ? plan.steps[i - 1].toolId : null,
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
 /** 브라우저 UI 언어 기준 locale ('en' | 'ko') */
 export function getUILocale() {
   if (typeof chrome !== 'undefined' && chrome.i18n && chrome.i18n.getUILanguage) {
@@ -116,7 +148,8 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
 5. **연속된 작업은 하나로 합치기**: "입력하세요"와 "제출하세요"처럼 연속된 작업은 별도 단계로 나누지 말고 하나의 단계로 합쳐서 안내하세요. 예: "입력하고 제출하세요" 또는 "입력 후 제출하세요".
 6. **행동 가능한 단계만 생성**: 실제로 사용자가 수행할 수 있는 인터랙션(클릭, 타이핑, 입력, 선택, 드래그 등)만 단계로 추가하세요. 단순히 "읽기", "확인하기", "보기", "참고하기" 같은 수동적인 행동은 단계로 포함하지 마세요. 예: "버튼을 클릭하세요", "텍스트를 입력하세요", "옵션을 선택하세요" 등.
 7. **선택자**: selector는 document.querySelector()로 찾을 수 있는 유효한 CSS 선택자여야 합니다. id, data 속성, 역할(button, a) 등을 우선 사용하세요. 찾기 어렵거나 해당 없으면 null.
-8. **explain 필드**: 각 단계마다, 해당 UI 요소가 어떤 기능을 하는지와 전체 웹사이트/서비스 제작 플로우에서 왜 이 단계를 지금 수행해야 하는지를 2~3문장으로 설명하세요. 비개발자도 이해할 수 있는 쉬운 한국어/영어로 작성하고, 가능한 한 구체적으로 작성합니다.${languageRule}`;
+8. **explain 필드**: 각 단계마다, 해당 UI 요소가 어떤 기능을 하는지와 전체 웹사이트/서비스 제작 플로우에서 왜 이 단계를 지금 수행해야 하는지를 2~3문장으로 설명하세요. 비개발자도 이해할 수 있는 쉬운 한국어/영어로 작성하고, 가능한 한 구체적으로 작성합니다.
+9. **단계 간 연동**: 유저 메시지에 "단계 간 연동"이 있으면, explain(및 필요 시 단계 안내 문장)에서 이전 단계에서 만든 결과를 이 단계에서 어떻게 쓰는지 비개발자도 이해할 수 있게 짧게 반영하세요.${languageRule}`;
 
   const userParts = [
     `## 설문 요약`,
@@ -126,6 +159,22 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
     `## 현재 페이지 URL`,
     pageUrl,
   ];
+
+  // 단계 간 연동: 현재 단계가 어떤 연동의 from 또는 to에 해당하면, "먼저 A에서 ~하고 B에서 ~한다" 식의 문장 추가
+  const stepContext = getCurrentPlanStepContext(plan, pageUrl);
+  if (stepContext) {
+    const messages = getPlannerMessages(locale);
+    const linkageList = messages?.crossStepLinkage;
+    const linkage = Array.isArray(linkageList)
+      ? linkageList.find(
+          (item) =>
+            item.fromTool === stepContext.currentToolId || item.toTool === stepContext.currentToolId,
+        )
+      : null;
+    if (linkage?.description) {
+      userParts.push('## 단계 간 연동', linkage.description);
+    }
+  }
 
   // 도메인별 가이드 문서가 있으면 추가
   if (domainGuide) {
@@ -238,6 +287,7 @@ export function buildPrompt(context, pageContext, pageUrl, domainGuide = null, l
  * @param {Array<{ role: 'user'|'assistant', text: string }>} history
  * @param {string} userMessage
  * @param {string} [locale] - 'en' | 'ko'
+ * @param {boolean} [explainFollowUp] - true면 단계 설명 팝업에서의 추가 질문이므로 답변을 3~4문장으로 제한
  */
 export function buildChatPrompt(
   context,
@@ -247,6 +297,7 @@ export function buildChatPrompt(
   history = [],
   userMessage = '',
   locale = 'en',
+  explainFollowUp = false,
 ) {
   const { plan, answers, previousStepsForUrl } = context;
   const answersText = formatSurveySummary(plan, answers);
@@ -374,6 +425,15 @@ export function buildChatPrompt(
     labels.replyGuide,
     labels.replyBullets,
   );
+
+  if (explainFollowUp) {
+    userParts.push(
+      '',
+      locale === 'ko'
+        ? '**단계 설명 팝업 추가 질문**: 답변은 반드시 3~4문장 분량으로만 간결하게 작성하세요.'
+        : '**Step explain follow-up**: Keep your answer to 3–4 sentences only.',
+    );
+  }
 
   return { system, user: userParts.join('\n') };
 }
@@ -721,7 +781,7 @@ export async function getPageGuidance(context, pageContext, pageUrl, locale) {
  * @param {string} userMessage
  * @returns {Promise<{ text: string }>}
  */
-export async function getPageChatAnswer(context, pageContext, pageUrl, history = [], userMessage = '', locale) {
+export async function getPageChatAnswer(context, pageContext, pageUrl, history = [], userMessage = '', locale, explainFollowUp = false) {
   const loc = locale ?? getUILocale();
   const { modelId, backendUrl } = await getStoredAISettings();
 
@@ -735,7 +795,7 @@ export async function getPageChatAnswer(context, pageContext, pageUrl, history =
   const domainId = getDomainIdFromUrl(pageUrl);
   const domainGuide = domainId ? await getDomainGuide(domainId) : null;
 
-  const messages = buildChatPrompt(context, pageContext, pageUrl, domainGuide, history, userMessage, loc);
+  const messages = buildChatPrompt(context, pageContext, pageUrl, domainGuide, history, userMessage, loc, explainFollowUp);
 
   const result = await callChatBackend(backendUrl, modelId, messages);
   return result;

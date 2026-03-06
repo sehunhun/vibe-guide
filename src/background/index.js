@@ -197,61 +197,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const noStepsForDomain = !!currentDomain && allPreviousSteps.length === 0;
         const previousWebSearchResult = (storage.webSearchContextByDomain && currentDomain && storage.webSearchContextByDomain[currentDomain]) || '';
 
-        // Google AI Studio 전용: 하드코딩된 6단계 안내 (로케일별 문구 적용)
-        const hostname = getDomainFromUrl(url);
-        if (hostname === 'aistudio.google.com') {
-          const BASE_STEPS = [
-            {
-              text: chrome.i18n.getMessage('aiStudioStep1'),
-              selector: 'div.prompt-input-wrapper.row.column',
-              action: 'copy_system_prompt',
-            },
-            {
-              text: chrome.i18n.getMessage('aiStudioStep2'),
-              selector: 'button[ms-button].mat-mdc-tooltip-trigger.ms-button-primary:not(.floating-toggle-button):not(.ifl-button):not(.model-button)',
-            },
-            {
-              text: chrome.i18n.getMessage('aiStudioStep3'),
-              selector: 'button[aria-label="설정"]',
-            },
-            {
-              text: chrome.i18n.getMessage('aiStudioStep4'),
-              selector: 'button[data-view="4"]',
-            },
-            {
-              text: chrome.i18n.getMessage('aiStudioStep5'),
-              selector: 'button[aria-label="Add secret"]',
-            },
-            {
-              text: chrome.i18n.getMessage('aiStudioStep6'),
-              selector: 'button.mat-mdc-tooltip-trigger.annotate-button.ms-button-filter-chip.ng-star-inserted',
-            },
-          ];
-
-          const existingSteps = previousStepsForUrl?.steps || [];
-          const completedFlags = previousStepsForUrl?.completed || [];
-
-          const allDone =
-            existingSteps.length === BASE_STEPS.length &&
-            completedFlags.length === existingSteps.length &&
-            completedFlags.every(Boolean);
-
-          if (allDone) {
-            // 모든 단계 완료 후 빈 배열 반환 → 프론트에서 "완료되었습니다" 메시지 추가
-            return { steps: [] };
-          }
-
-          const nextIndex = existingSteps.length;
-
-          // 아직 한 번도 단계가 생성되지 않았거나, 모든 생성된 단계를 완료했다면 다음 단계 하나만 추가
-          if (nextIndex < BASE_STEPS.length) {
-            return { steps: [BASE_STEPS[nextIndex]] };
-          }
-
-          // 이론상 도달하지 않지만, 안전하게 더 이상 새 단계가 없음을 알림
-          return { steps: [] };
-        }
-
         const locale = getUILocale();
         const result = await getPageGuidance(
           {
@@ -340,6 +285,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           : undefined;
 
         const locale = getUILocale();
+        const explainFollowUp = msg.explainFollowUp === true;
         const result = await getPageChatAnswer(
           { plan, answers, previousStepsForUrl },
           { type: pageContext.type, nodes: pageContext.nodes },
@@ -347,6 +293,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           Array.isArray(history) ? history : [],
           userMessage || '',
           locale,
+          explainFollowUp,
         );
 
         return { text: result.text };

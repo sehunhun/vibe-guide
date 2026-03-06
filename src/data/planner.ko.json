@@ -84,7 +84,7 @@
       "desc": "Vercel에서 사이트를 배포하세요."
     }
   },
-  "toolStepDesc": "$toolName$ 사이트에서 계정을 만들고 연결하세요.",
+  "toolStepDesc": "$toolName$ 사이트에서 로그인 및 프로젝트 생성 후 시크릿을 조회하세요. 해당 시크릿을 Google AI Studio의 환경 변수에 추가하세요.",
   "fallbackRole": "보조 도구",
   "fallbackDesc": "기능",
   "systemPrompt": {
@@ -94,5 +94,12 @@
     "envSection": "## 중요: 환경변수 사용",
     "envLine": "도구들과 기능을 연결하기 위해 필요한 API 키, 시크릿, URL 등은 반드시 환경변수로 관리하세요. 코드에 직접 넣지 마세요.",
     "envExample": "필요한 환경변수 예: "
-  }
+  },
+  "crossStepLinkage": [
+    {
+      "fromTool": "google-ai-studio",
+      "toTool": "vercel",
+      "description": "먼저 Google AI Studio에서 앱을 빌드하고 GitHub에 푸시한 뒤, Vercel에서 그 GitHub 레포를 import해 배포합니다."
+    }
+  ]
 }

@@ -7,6 +7,7 @@
 
 import demoGuide from './guides/demo-guide.md';
 import ga4Guide from './guides/ga4.md';
+import googleAiStudioGuide from './guides/google-ai-studio.md';
 import resendGuide from './guides/resend.md';
 import sanityGuide from './guides/sanity.md';
 import sentryGuide from './guides/sentry.md';
@@ -16,6 +17,7 @@ import supabaseGuide from './guides/supabase.md';
 const GUIDE_MAP = {
   'demo-guide': demoGuide,
   ga4: ga4Guide,
+  'google-ai-studio': googleAiStudioGuide,
   resend: resendGuide,
   sanity: sanityGuide,
   sentry: sentryGuide,

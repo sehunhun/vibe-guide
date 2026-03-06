@@ -94,5 +94,12 @@
     "envSection": "## Important: Use environment variables",
     "envLine": "API keys, secrets, and URLs needed to connect tools must be managed as environment variables. Do not put them directly in code.",
     "envExample": "Example env vars: "
-  }
+  },
+  "crossStepLinkage": [
+    {
+      "fromTool": "google-ai-studio",
+      "toTool": "vercel",
+      "description": "First build the app in Google AI Studio and push it to GitHub, then import that GitHub repo in Vercel to deploy."
+    }
+  ]
 }

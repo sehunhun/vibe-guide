@@ -836,9 +836,12 @@ export default function Guide({ plan, currentTab, onPlanUpdate, onReset }) {
     return { steps: allSteps };
   }, [pageUrl, guidanceByUrl]);
 
-  // 선택된 도메인이 있으면 해당 도메인의 guidance, 없으면 현재 페이지의 guidance
-  const mergedGuidance = getMergedGuidanceForDomain(selectedDomainUrl);
-  const pageGuidance = mergedGuidance || (pageUrl ? guidanceByUrl[pageUrl] : null);
+  // 선택된 도메인이 있으면 해당 도메인, 없으면 현재 페이지 URL 기준으로
+  // 같은 도메인(사이트) 내 모든 URL의 guidance를 합쳐서 표시
+  const mergedGuidance = getMergedGuidanceForDomain(selectedDomainUrl || pageUrl);
+  const pageGuidance = (selectedDomainUrl || pageUrl)
+    ? (mergedGuidance || (!selectedDomainUrl ? guidanceByUrl[pageUrl] : null))
+    : null;
   const hasCompletionMessage = pageGuidance?.steps?.some((s) => s.isCompletionMessage === true);
   // 로딩 상태도 "현재 표시 중인 사이트(툴)" 기준으로 표시
   const displayUrlForGuidance = selectedDomainUrl || pageUrl;

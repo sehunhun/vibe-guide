@@ -336,6 +336,28 @@ async def get_guidance(request: GuidanceRequest):
                 }
             }
 
+        # 단계 생성 AI 프롬프트 로깅 (생성 시점마다)
+        try:
+            system_text = (payload["input"][0]["content"][0].get("text") or "")
+            user_content_list = payload["input"][1].get("content") or []
+            user_text = "".join(
+                item.get("text", "") for item in user_content_list
+                if item.get("type") == "input_text"
+            )
+            logger.info(
+                "[step_prompt] url=%s page_context_type=%s use_axtree=%s no_steps_for_domain=%s system_len=%d user_len=%d",
+                request.page_url or "",
+                request.page_context_type,
+                use_axtree,
+                request.no_steps_for_domain,
+                len(system_text),
+                len(user_text),
+            )
+            logger.info("[step_prompt] system 전체:\n%s", system_text)
+            logger.info("[step_prompt] user 전체:\n%s", user_text)
+        except Exception as log_err:
+            logger.warning("[step_prompt] 로깅 중 오류: %s", log_err)
+
         logger.info("OpenAI Responses API 호출 시작 (web_search 도구 사용)")
         async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(

@@ -177,21 +177,22 @@ export default function Chat({ plan, currentTab }) {
                 )}
               >
                 <CardContent className="px-3 py-2 text-xs leading-relaxed">
+                  {renderTextWithLineBreaks(activeText)}
                   {showPager && (
-                    <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>
+                    <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2 text-xs font-medium text-foreground">
+                      <span className="tabular-nums">
                         {currentIndex + 1} / {totalSegments}
                       </span>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
                           onClick={goToPrev}
                           disabled={currentIndex === 0}
                           className={cn(
-                            'rounded px-1 py-0.5 transition-colors',
+                            'flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background text-sm transition-colors',
                             currentIndex === 0
                               ? 'cursor-not-allowed opacity-40'
-                              : 'hover:bg-muted'
+                              : 'hover:bg-muted hover:border-muted-foreground/30'
                           )}
                           aria-label="이전 구간"
                         >
@@ -202,10 +203,10 @@ export default function Chat({ plan, currentTab }) {
                           onClick={goToNext}
                           disabled={currentIndex >= totalSegments - 1}
                           className={cn(
-                            'rounded px-1 py-0.5 transition-colors',
+                            'flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background text-sm transition-colors',
                             currentIndex >= totalSegments - 1
                               ? 'cursor-not-allowed opacity-40'
-                              : 'hover:bg-muted'
+                              : 'hover:bg-muted hover:border-muted-foreground/30'
                           )}
                           aria-label="다음 구간"
                         >
@@ -214,7 +215,6 @@ export default function Chat({ plan, currentTab }) {
                       </div>
                     </div>
                   )}
-                  {renderTextWithLineBreaks(activeText)}
                 </CardContent>
               </Card>
             </div>
