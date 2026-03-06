@@ -254,12 +254,15 @@ function createExplainPopup(explain, stepKey) {
 
   removeExplainPopup();
 
+  const parent = document.querySelector('.cdk-overlay-container') || document.body;
+  const popupZIndex = parent === document.body ? 2147483647 : 9999;
+
   const popupRoot = document.createElement('div');
   popupRoot.id = POPUP_ROOT_ID;
   popupRoot.style.cssText = `
     position: fixed;
     inset: 0;
-    z-index: 2147483647;
+    z-index: ${popupZIndex};
     pointer-events: none;
     isolation: isolate;
   `;
@@ -549,7 +552,7 @@ function createExplainPopup(explain, stepKey) {
 
   renderHistory();
   popupRoot.appendChild(popup);
-  document.body.appendChild(popupRoot);
+  parent.appendChild(popupRoot);
 
   return popup;
 }
